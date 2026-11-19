@@ -37,7 +37,7 @@ if command -v helm >/dev/null; then
 fi
 if command -v oc >/dev/null; then
   ov=$(oc version --client -o json 2>/dev/null | jq -r '.releaseClientVersion // .clientVersion.gitVersion' 2>/dev/null)
-  info "oc client $ov (4.19 recommended)"
+  info "oc client $ov"
 fi
 if (cd "$D/packages" && sha256sum -c --quiet SHA256SUMS >/dev/null 2>&1); then pass "chart packages intact (SHA256SUMS)"
 else fail "chart packages do not match SHA256SUMS" "re-copy the deploy/packages folder"; fi
@@ -100,7 +100,7 @@ if crd elasticsearches.elasticsearch.k8s.elastic.co; then
 else warn "ECK operator not installed" "with client approval (A4), install it: RUNBOOK 0.4, ECK command"; fi
 if crd queues.scheduling.volcano.sh; then
   fail "Volcano is already installed by someone else" "STOP: do not install a second Volcano; contact us"
-else pass "Volcano not installed: our flywheel install brings it (approval A1)"; fi
+else pass "Volcano not installed: we install v1.15.4 before the flywheel (RUNBOOK 1.2, approval A1)"; fi
 if crd nemotrainingjobs.nvidia.com; then
   fail "NeMo Operator CRDs already exist (someone else runs NeMo)" "STOP: contact us before installing the flywheel"
 else pass "no other NeMo installation"; fi

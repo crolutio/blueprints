@@ -12,9 +12,8 @@ FLYWHEEL_IMAGES=(
   docker.io/library/redis:7.2.5-alpine
   docker.io/bitnamilegacy/postgresql:16.1.0-debian-11-r20
   docker.io/bitnamilegacy/postgresql:16.2.0-debian-11-r1
-  docker.io/volcanosh/vc-controller-manager:v1.9.0
-  docker.io/volcanosh/vc-scheduler:v1.9.0
-  docker.io/volcanosh/vc-webhook-manager:v1.9.0
+  docker.io/volcanosh/vc-controller-manager:v1.15.4
+  docker.io/volcanosh/vc-scheduler:v1.15.4
   registry.redhat.io/ubi9/nginx-126:1-1777855212
   nvcr.io/nvidia/nemo-microservices/entity-store:25.08
 )

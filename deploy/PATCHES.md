@@ -53,6 +53,10 @@ Not changed: the judge. `llm_judge_config` is already exposed in values
 | N10 | `charts/volcano/templates/scheduler.yaml` | Debug-socket `hostPath` becomes `emptyDir` | hostPath is rejected by restricted-v2 | same flag |
 | N11 | `charts/volcano/templates/{admission,controllers,scheduler}.yaml` | No `priorityClassName: system-cluster-critical` | That class is reserved for system namespaces; pods using it are normally rejected elsewhere | same flag |
 
+**N9-N11 are not used any more.** The bundled Volcano 1.9.0 stays disabled (`volcano.enabled: false`):
+the client runs OpenShift 4.22 (Kubernetes 1.35), which Volcano supports from v1.15. Volcano 1.15.4 is
+installed as its own release instead (section 5).
+
 ## 3. RAG chart
 
 | # | File | Change | Why | Enabled by |
@@ -73,3 +77,11 @@ Not changed: the judge. `llm_judge_config` is already exposed in values
 
 NIM Operator 3.0.2 and ECK operator 3.3.2, installed from the vendors' Helm repos **only** if the
 cluster lacks them **and** the client approves (RUNBOOK 0.4).
+
+**Volcano 1.15.4** (RUNBOOK 1.2), installed unmodified from `https://volcano-sh.github.io/helm-charts`
+with `deploy/volcano/values-volcano.yaml`:
+- admission webhooks off (no webhook objects at all); only the controller and scheduler run;
+- restricted-v2 compatible security contexts (the chart's fixed UID 1000, added capability and fixed
+  SELinux level are removed through values); requests/limits on both containers;
+- `deploy/scripts/volcano-postrender.sh` (Helm post-renderer) deletes `priorityClassName:
+  system-cluster-critical` from the rendered pods, the same effect as N11.

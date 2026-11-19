@@ -352,12 +352,11 @@ explicit client approval. Exact object lists:
 <tbody>
 <tr class="odd">
 <td>A1</td>
-<td><strong>Volcano v1.9.0</strong> batch scheduler</td>
+<td><strong>Volcano v1.15.4</strong> batch scheduler</td>
 <td>Flywheel</td>
-<td>7 CRDs (<code>*.volcano.sh</code>), 3 ClusterRoles + 3
-ClusterRoleBindings, 4 mutating + 3 validating webhooks, runtime Queues
-<code>default</code>/<code>root</code>. Pods run in
-<code>nvaie-test</code>.</td>
+<td>11 CRDs (<code>*.volcano.sh</code>), 4 ClusterRoles + 2
+ClusterRoleBindings, runtime Queues <code>default</code>/<code>root</code>.
+No webhooks. 2 pods in <code>nvaie-test</code>.</td>
 <td>NeMo Customizer 25.8 runs every fine-tuning job through Volcano</td>
 <td>Customizer cannot run, so the flywheel plan wording is not met</td>
 </tr>
@@ -458,10 +457,11 @@ list first; delete only what the list shows.</li>
 <p><strong>Folder map</strong></p>
 <pre><code>RUNBOOK.html                    this file
 deploy/packages/                our two patched charts (installed from these files) + SHA256SUMS
-deploy/flywheel/                values-nvaie-common.yaml, values-layout-{l40s,h200}.yaml,
-                                values-volcano.yaml, data/
+deploy/flywheel/                values-nvaie-common.yaml, values-layout-{l40s,h200}.yaml, data/
+deploy/volcano/                 values-volcano.yaml (Volcano 1.15.4, installed in 1.2)
 deploy/rag/                     values-nvaie.yaml, sample/nvaie-validation-note.txt
-deploy/scripts/                 preflight.sh, gpu-free.sh, pull-check.sh, flywheel-check.sh, rag-test.sh, evidence.sh
+deploy/scripts/                 preflight.sh, gpu-free.sh, pull-check.sh, volcano-postrender.sh,
+                                flywheel-check.sh, rag-test.sh, evidence.sh
 deploy/reports/                 offline renders + analysis (GPU, images, PVCs, cluster-scoped, SCC)
 deploy/PATCHES.md               every change made to the upstream charts, and why (+ the *.diff files)</code></pre>
 <hr />
@@ -478,7 +478,7 @@ deploy/PATCHES.md               every change made to the upstream charts, and wh
 <tbody>
 <tr class="odd">
 <td><code>oc</code></td>
-<td>4.19</td>
+<td>same as the cluster (4.22)</td>
 <td>cluster access</td>
 </tr>
 <tr class="even">
@@ -642,7 +642,7 @@ straight from Elastic's Helm repo (below).</td>
 </tr>
 <tr class="even">
 <td>Volcano absent</td>
-<td>Approved: use <code>values-volcano.yaml</code> in 1.2. Not approved:
+<td>Approved: install Volcano 1.15.4 in 1.2. Not approved:
 Customizer cannot run (plan wording not met).</td>
 </tr>
 </tbody>
@@ -702,8 +702,25 @@ file.</li>
 <div class="sourceCode" id="cb8"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">FW_PKG</span><span class="op">=</span>deploy/packages/nvidia-blueprint-data-flywheel-0.3.1-nvaie.1.tgz</span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">LAYOUT</span><span class="op">=</span>deploy/flywheel/values-layout-l40s.yaml     <span class="co"># or values-layout-h200.yaml (see 0.5)</span></span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="va">FW_VALUES</span><span class="op">=</span><span class="va">(</span>-f deploy/flywheel/values-nvaie-common.yaml -f <span class="va">$LAYOUT</span> -f deploy/flywheel/values-volcano.yaml<span class="va">)</span></span></code></pre></div>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="va">FW_VALUES</span><span class="op">=</span><span class="va">(</span>-f deploy/flywheel/values-nvaie-common.yaml -f <span class="va">$LAYOUT</span><span class="va">)</span></span></code></pre></div>
 <h3 id="12-install"><span class="num">1.2</span> Install</h3>
+<p>First Volcano 1.15.4 (approval A1), straight from Volcano's Helm
+repo. NeMo 25.8 bundles Volcano 1.9.0, which does not support this
+cluster's Kubernetes 1.35, so the bundled one stays off.</p>
+<div class="sourceCode" id="cb9v"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb9v-1"><a href="#cb9v-1" aria-hidden="true" tabindex="-1"></a><span class="fu">chmod</span> +x deploy/scripts/volcano-postrender.sh</span>
+<span id="cb9v-2"><a href="#cb9v-2" aria-hidden="true" tabindex="-1"></a><span class="ex">helm</span> install volcano volcano <span class="at">--repo</span> https://volcano-sh.github.io/helm-charts <span class="at">--version</span> 1.15.4 <span class="at">-n</span> <span class="va">$NS</span> <span class="dt">\</span></span>
+<span id="cb9v-3"><a href="#cb9v-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">-f</span> deploy/volcano/values-volcano.yaml <span class="at">--post-renderer</span> ./deploy/scripts/volcano-postrender.sh <span class="at">--wait</span> <span class="at">--timeout</span> 10m</span>
+<span id="cb9v-4"><a href="#cb9v-4" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pods <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-l</span> <span class="st">&#39;app in (volcano-scheduler,volcano-controller)&#39;</span></span>
+<span id="cb9v-5"><a href="#cb9v-5" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get queue</span></code></pre></div>
+<p>Expected: <code>volcano-controllers-...</code> and
+<code>volcano-scheduler-...</code> both <code>1/1 Running</code>;
+<code>oc get queue</code> lists <code>default</code> (and
+<code>root</code>) within a minute. <strong class="flag stop">STOP</strong> if either pod
+is not Running after 5 minutes (logs:
+<code>oc logs -n $NS deploy/volcano-scheduler</code>); uninstall it (1.8
+step 4) and contact us.</p>
+<p>Then the flywheel:</p>
 <div class="sourceCode" id="cb9"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">bash</span> deploy/scripts/gpu-free.sh <span class="kw">|</span> <span class="fu">tail</span> <span class="at">-4</span></span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="ex">helm</span> upgrade <span class="at">--install</span> flywheel <span class="va">$FW_PKG</span> <span class="at">-n</span> <span class="va">$NS</span> <span class="st">&quot;</span><span class="va">${FW_VALUES</span><span class="op">[@]</span><span class="va">}</span><span class="st">&quot;</span> <span class="at">--wait</span> <span class="at">--timeout</span> 25m</span></code></pre></div>
@@ -739,8 +756,7 @@ flywheel-evaluator-...                        2/2  Running
 flywheel-evaluatordb-0                        1/1  Running
 flywheel-nemo-operator-controller-manager-... 1/1  Running
 flywheel-nim-proxy-...                        1/1  Running
-flywheel-admission-... / -controllers-... / -scheduler-...   1/1  Running   (Volcano)
-flywheel-admission-init-...                   0/1  Completed</code></pre>
+volcano-controllers-... / volcano-scheduler-...                1/1  Running   (installed first, 1.2)</code></pre>
 <p>At startup the API asks NeMo to deploy the <strong>judge NIM</strong>
 (local judge only). Watch it (first start downloads the model, 10-20
 minutes):</p>
@@ -861,11 +877,12 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb24-1"><a href=
 <li>Stop the port-forwards (Ctrl-C in the second terminal), then remove
 the release:
 <div class="sourceCode" id="cb25"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="ex">helm</span> uninstall flywheel <span class="at">-n</span> <span class="va">$NS</span> <span class="at">--wait</span> <span class="at">--timeout</span> 10m</span></code></pre></div>
-Expected: <code>release "flywheel" uninstalled</code>. This also removes
-the Volcano CRDs, webhooks and ClusterRoles (they are templates of this
-release), and with them Volcano's <code>default</code>/<code>root</code>
-Queues.</li>
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="ex">helm</span> uninstall flywheel <span class="at">-n</span> <span class="va">$NS</span> <span class="at">--wait</span> <span class="at">--timeout</span> 10m</span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="ex">helm</span> uninstall volcano  <span class="at">-n</span> <span class="va">$NS</span> <span class="at">--wait</span> <span class="at">--timeout</span> 10m</span></code></pre></div>
+Expected: <code>release "flywheel" uninstalled</code> and
+<code>release "volcano" uninstalled</code>. The second also removes the
+Volcano CRDs and ClusterRoles (they are templates of that release), and
+with them Volcano's <code>default</code>/<code>root</code> Queues.</li>
 <li>Volumes left behind (Postgres StatefulSet PVCs,
 <code>datastore-shared-storage</code> which has a keep policy, NIM cache
 PVCs, training PVCs). List, check, then delete exactly those names:
@@ -889,8 +906,8 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb28-1"><a href=
 <li>Verify nothing of the flywheel is left:
 <div class="sourceCode" id="cb29"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get all,pvc,cm,secret,nimservice,nimcache <span class="at">-n</span> <span class="va">$NS</span></span>
-<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get validatingwebhookconfiguration,mutatingwebhookconfiguration <span class="at">-o</span> name <span class="kw">|</span> <span class="fu">grep</span> <span class="at">-i</span> volcano <span class="kw">||</span> <span class="bu">echo</span> <span class="st">&quot;no volcano webhooks&quot;</span></span>
-<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get clusterrole <span class="at">-o</span> name <span class="kw">|</span> <span class="fu">grep</span> <span class="at">-E</span> <span class="st">&#39;flywheel-&#39;</span> <span class="kw">||</span> <span class="bu">echo</span> <span class="st">&quot;no flywheel clusterroles&quot;</span></span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get crd <span class="at">-o</span> name <span class="kw">|</span> <span class="fu">grep</span> volcano.sh <span class="kw">||</span> <span class="bu">echo</span> <span class="st">&quot;no volcano CRDs&quot;</span></span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get clusterrole <span class="at">-o</span> name <span class="kw">|</span> <span class="fu">grep</span> <span class="at">-E</span> <span class="st">&#39;flywheel-|volcano|vcjob-&#39;</span> <span class="kw">||</span> <span class="bu">echo</span> <span class="st">&quot;no flywheel/volcano clusterroles&quot;</span></span>
 <span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a><span class="fu">bash</span> deploy/scripts/gpu-free.sh <span class="kw">|</span> <span class="fu">tail</span> <span class="at">-4</span></span></code></pre></div>
 Expected: only the two NGC secrets, the default ServiceAccount objects,
 and (case A) the NIM Operator / ECK pods remain.</li>
@@ -1076,12 +1093,12 @@ errors</td>
 <td>keep NVIDIA's caps (<code>RAG_NV_INGEST_DETECTED_CPUS=4</code>)</td>
 </tr>
 <tr class="even">
-<td>Volcano admission pod down, pods in <code>nvaie-test</code>
-rejected</td>
-<td>webhook <code>failurePolicy: Fail</code>, scoped to
-<code>nvaie-test</code> only</td>
-<td><code>oc get pods -l app=volcano-admission</code>; other namespaces
-are not affected</td>
+<td>Training job stays <code>Pending</code>, no training pod</td>
+<td>Volcano scheduler not running, or the Queue <code>default</code> is
+missing</td>
+<td><code>oc get pods -n $NS -l app=volcano-scheduler</code>;
+<code>oc get queue</code>;
+<code>oc logs -n $NS deploy/volcano-scheduler</code></td>
 </tr>
 </tbody>
 </table></div>
@@ -1108,14 +1125,18 @@ Gitea/data-store without UID 1000.</li>
 <code>meta/llama-3.2-1b-instruct</code>: NeMo 25.8 ships an L40 profile
 for this exact target (sft/LoRA, 1 GPU, TP1), so expected to work; never
 run here.</li>
-<li><strong>deployment-management 25.8 with NIM Operator 3.0.2</strong>
-(case A): NeMo 25.8 bundles 2.0.2.</li>
+<li><strong>deployment-management 25.8 with the client's NIM Operator
+3.1.2</strong>: NeMo 25.8 bundles 2.0.2.</li>
 <li><strong>NIM placement</strong>: deployment-management cannot set a
 nodeSelector; NIMs take any free GPU (by decision).</li>
 <li><strong>Kueue</strong> behaviour for runtime-created pods if
 <code>nvaie-test</code> is Kueue-managed (0.3.4).</li>
 <li><strong>ECK 3.3.2 / Elasticsearch 9.3.0</strong> on this cluster;
 ECK webhook disabled in our install.</li>
+<li><strong>Volcano 1.15.4 with NeMo 25.8</strong>: NVIDIA ships and
+tests 1.9.0, which does not support Kubernetes 1.35. NeMo only uses
+Volcano's stable Job/PodGroup/Queue APIs, unchanged since 1.9, so
+expected to work; never run.</li>
 <li><strong>StorageClass name</strong>
 <code>ocs-storagecluster-ceph-rbd</code> (ODF default name), checked by
 the pre-flight (0.3), including the write test.</li>
