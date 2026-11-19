@@ -65,6 +65,7 @@ nemoGateway:
 
 # --- Infra for the flywheel (ephemeral, emptyDir only; test data is reloaded per run) ---
 elasticsearch:
+  image: {repository: docker.io/library/elasticsearch, tag: "8.12.2"}   # docker.elastic.co is blocked on the client cluster; same release from Docker Hub
   service: {type: ClusterIP, port: 9200}
   dataDirs: [/usr/share/elasticsearch/data]
   resources:

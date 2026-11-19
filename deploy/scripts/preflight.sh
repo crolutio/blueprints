@@ -4,7 +4,7 @@
 #
 # Changes it makes (all inside the namespace, all labelled, the test objects are removed again):
 #   - creates the secrets ngc-registry-default and ngc-api ONLY if they are missing (needs $NGC_API_KEY)
-#   - one 1Gi test PVC + pod (storage write test), deleted at the end of the test
+#   - one 1Gi test PVC + Job (storage write test), deleted at the end of the test
 #   - one tiny pod per image (pull check, via pull-check.sh), deleted at the end of the test
 # Nothing cluster-scoped is created or changed.
 #
@@ -84,8 +84,14 @@ section "Operators already on the cluster (0.3.3, decides 0.4)"
 crd() { oc get crd "$1" >/dev/null 2>&1; }
 imgs=$(oc get pods -A -o jsonpath='{range .items[*]}{.spec.containers[*].image}{"\n"}{end}' 2>/dev/null | tr ' ' '\n' | sort -u)
 if crd nimservices.apps.nvidia.com; then
-  t=$(grep -E 'k8s-nim-operator:' <<<"$imgs" | head -1 | sed 's/.*://; s/^v//')
-  if [ -z "$t" ]; then warn "NIM Operator CRDs exist but no operator pod found" "ask the client who owns the NIM Operator and whether it is running"
+  # image may be tagged (helm install) or pinned by digest (OperatorHub/OLM install)
+  nimimg=$(grep -iE 'nim-operator[^/]*[:@]' <<<"$imgs" | head -1)
+  t=$(sed -n 's/.*nim-operator[^/:@]*:v\{0,1\}\([0-9][0-9.]*\).*/\1/p' <<<"$nimimg")
+  # OperatorHub install: read the version from its ClusterServiceVersion
+  [ -z "$t" ] && t=$(oc get csv -A -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.spec.version}{"\n"}{end}' 2>/dev/null \
+                     | awk 'tolower($1) ~ /nim/ {print $2; exit}' | sed 's/^v//')
+  if [ -z "$nimimg" ] && [ -z "$t" ]; then warn "NIM Operator CRDs exist but no operator pod found" "ask the client who owns the NIM Operator and whether it is running (oc get pods -A | grep -i nim; oc get csv -A | grep -i nim)"
+  elif [ -z "$t" ]; then warn "NIM Operator pod found ($nimimg) but version unknown" "confirm the version is >= 3.0.2: oc get csv -A | grep -i nim"
   elif ver_ge "$t" 3.0.2; then pass "NIM Operator $t present (>= 3.0.2): nothing to install"
   else fail "NIM Operator $t is older than 3.0.2" "ask the client to upgrade the NIM Operator (RAG needs >= 3.0.2)"; fi
 else warn "NIM Operator not installed" "with client approval (A3), install it: RUNBOOK 0.4, NIM Operator command"; fi
@@ -133,40 +139,60 @@ oc secrets link default ngc-registry-default --for=pull -n "$NS" >/dev/null 2>&1
   && pass "default ServiceAccount can use ngc-registry-default" || warn "could not link the pull secret to the default ServiceAccount" "oc secrets link default ngc-registry-default --for=pull -n $NS"
 
 # ---------------------------------------------------------------- storage write test
-section "Storage write test (restricted-v2 + $SC)"
+# Runs as a Job, not a bare pod: a bare pod created by an admin can be admitted under any SCC the
+# admin may use; a Job's pod is admitted like the real workloads (service account permissions only).
+# This also shows whether Kueue holds Jobs that carry no queue label (the flywheel's eval Jobs cannot).
+section "Storage write test (as a real workload: SCC + $SC + Kueue)"
 if oc get storageclass "$SC" >/dev/null 2>&1; then
-  oc delete pod,pvc -n "$NS" -l nvaie-test=rwtest --wait=true >/dev/null 2>&1
+  oc delete job,pod,pvc -n "$NS" -l nvaie-test=rwtest --wait=true >/dev/null 2>&1
   cat <<EOF | oc apply -n "$NS" -f - >/dev/null
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata: {name: nvaie-rwtest, labels: {nvaie-test: rwtest}}
 spec: {accessModes: [ReadWriteOnce], storageClassName: $SC, resources: {requests: {storage: 1Gi}}}
 ---
-apiVersion: v1
-kind: Pod
+apiVersion: batch/v1
+kind: Job
 metadata: {name: nvaie-rwtest, labels: {nvaie-test: rwtest}}
 spec:
-  restartPolicy: Never
-  containers:
-  - name: t
-    image: $TEST_IMAGE
-    command: ["/bin/sh","-c","id; touch /data/ok && echo WRITE_OK"]
-    resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 64Mi}}
-    securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
-    volumeMounts: [{name: d, mountPath: /data}]
-  volumes: [{name: d, persistentVolumeClaim: {claimName: nvaie-rwtest}}]
+  backoffLimit: 0
+  template:
+    metadata: {labels: {nvaie-test: rwtest}}
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: t
+        image: $TEST_IMAGE
+        command: ["/bin/sh","-c","id; touch /data/ok && echo WRITE_OK"]
+        resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 64Mi}}
+        securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+        volumeMounts: [{name: d, mountPath: /data}]
+      volumes: [{name: d, persistentVolumeClaim: {claimName: nvaie-rwtest}}]
 EOF
-  oc wait pod/nvaie-rwtest -n "$NS" --for=jsonpath='{.status.phase}'=Succeeded --timeout=180s >/dev/null 2>&1
-  out=$(oc logs nvaie-rwtest -n "$NS" 2>/dev/null)
-  scc=$(oc get pod nvaie-rwtest -n "$NS" -o jsonpath='{.metadata.annotations.openshift\.io/scc}' 2>/dev/null)
-  if grep -q WRITE_OK <<<"$out"; then pass "new volume is writable by a non-root pod (SCC: ${scc:-unknown})"
+  oc wait job/nvaie-rwtest -n "$NS" --for=condition=complete --timeout=240s >/dev/null 2>&1
+  susp=$(oc get job nvaie-rwtest -n "$NS" -o jsonpath='{.spec.suspend}' 2>/dev/null)
+  pod=$(oc get pod -n "$NS" -l job-name=nvaie-rwtest -o name 2>/dev/null | head -1)
+  if [ "$susp" = true ] && [ -z "$pod" ]; then
+    fail "Kueue held the test Job (suspended, no pod created)" "ask the client to exempt $NS from Kueue: the flywheel's evaluation/training Jobs cannot carry a queue label (RUNBOOK 0.3.4)"
+  elif [ -z "$pod" ]; then
+    fail "test Job created no pod within 4 minutes" "send this output to us"
+    oc describe job nvaie-rwtest -n "$NS" | tail -8 | sed 's/^/        /'
   else
-    fail "could not write to a new $SC volume" "send this output to the storage admin"
-    { echo "$out"; oc describe pod nvaie-rwtest -n "$NS" | tail -8; } | sed 's/^/        /'
+    out=$(oc logs "$pod" -n "$NS" 2>/dev/null)
+    scc=$(oc get "$pod" -n "$NS" -o jsonpath='{.metadata.annotations.openshift\.io/scc}' 2>/dev/null)
+    if grep -q WRITE_OK <<<"$out"; then pass "new volume is writable by a non-root pod (SCC: ${scc:-unknown})"
+    else
+      if [ -n "$scc" ] && [ "$scc" != restricted-v2 ]; then
+        fail "could not write to a new $SC volume under SCC '$scc'" "workloads in $NS get SCC '$scc' instead of restricted-v2; send this output to us"
+      else
+        fail "could not write to a new $SC volume" "send this output to the storage admin"
+      fi
+      { echo "$out"; oc describe "$pod" -n "$NS" | tail -8; } | sed 's/^/        /'
+    fi
+    [ -n "$scc" ] && [ "$scc" != restricted-v2 ] && warn "workload pod ran under SCC '$scc', not restricted-v2" "tell us; the plan assumes restricted-v2"
   fi
-  [ -n "$scc" ] && [ "$scc" != restricted-v2 ] && warn "test pod ran under SCC '$scc', not restricted-v2" "tell us; the plan assumes restricted-v2"
-  oc delete pod,pvc -n "$NS" -l nvaie-test=rwtest --wait=false >/dev/null 2>&1
-  info "test pod and PVC deleted"
+  oc delete job,pod,pvc -n "$NS" -l nvaie-test=rwtest --wait=false >/dev/null 2>&1
+  info "test Job, pod and PVC deleted"
 else info "skipped (StorageClass missing, see above)"; fi
 
 # ---------------------------------------------------------------- image pulls
@@ -178,6 +204,7 @@ while read -r res img; do
     FAILED|TIMEOUT) fail "pull $img ($res)" "registry for $img is blocked: mirror the image or allow the registry (approval A6)";;
   esac
 done < <(grep -E '^(OK|FAILED|TIMEOUT) ' <<<"$pc")
+grep -A2 -E '^(FAILED|TIMEOUT) ' <<<"$pc" | grep -E '^ {5,}' | sed 's/^ */        reason: /' 
 info "pull-check pods deleted"
 
 # ---------------------------------------------------------------- gpus

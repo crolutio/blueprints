@@ -417,8 +417,8 @@ design)</td>
 <td>A6</td>
 <td><strong>Image registries</strong> besides nvcr.io</td>
 <td>Both</td>
-<td>docker.io (mongo, redis, Bitnami Postgres, Volcano, seaweedfs),
-docker.elastic.co (Elasticsearch), registry.redhat.io (nginx proxy)</td>
+<td>docker.io (mongo, redis, Bitnami Postgres, Volcano, seaweedfs,
+Elasticsearch, ECK operator), registry.redhat.io (nginx proxy)</td>
 <td>Components of the blueprints</td>
 <td>Mirror the images, or the affected component cannot start</td>
 </tr>
@@ -592,7 +592,13 @@ overlay already handles low limits.</p>
 UID/GID/fsGroup; OpenShift's restricted-v2 SCC assigns an fsGroup from
 the namespace range, and that is what makes new volumes writable. If a
 new volume is not writable by a non-root pod, send the script output to
-the storage admin.</p>
+the storage admin.
+The test runs as a Job, so its pod gets the same SCC the real workloads
+will get. If the output names an SCC other than <code>restricted-v2</code>
+(for example an OpenShift AI SCC), the write usually fails because that SCC
+assigns no fsGroup. That is a namespace/SCC problem, not a storage problem:
+<strong class="flag stop">STOP</strong> and send us the output. If the test
+Job is held by Kueue, see 0.3.4: the client must exempt the namespace.</p>
 <p><strong>Image pull fails.</strong> That registry is blocked. Check
 the cluster's ImageDigestMirrorSet
 (<code>oc get imagedigestmirrorset -o yaml</code>) with the client, or
@@ -651,11 +657,14 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="
 (<code>*.apps.nvidia.com</code>), 3 ClusterRoles and 2
 ClusterRoleBindings.</p>
 <p>Install ECK 3.3.2 (approved only), managing only this namespace and
-without its validating webhook:</p>
+without its validating webhook. <code>docker.elastic.co</code> is blocked
+on this cluster, so the operator image comes from Docker Hub (same
+release):</p>
 <div class="sourceCode" id="cb5"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">helm</span> install elastic-operator eck-operator <span class="at">--repo</span> https://helm.elastic.co <span class="at">--version</span> 3.3.2 <span class="at">-n</span> <span class="va">$NS</span> <span class="dt">\</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--set</span> managedNamespaces=<span class="st">&quot;{</span><span class="va">$NS</span><span class="st">}&quot;</span> <span class="at">--set</span> webhook.enabled=false <span class="at">--wait</span> <span class="at">--timeout</span> 10m</span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pods <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-l</span> control-plane=elastic-operator</span></code></pre></div>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--set</span> managedNamespaces=<span class="st">&quot;{</span><span class="va">$NS</span><span class="st">}&quot;</span> <span class="at">--set</span> webhook.enabled=false <span class="dt">\</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--set</span> image.repository=docker.io/elastic/eck-operator <span class="at">--wait</span> <span class="at">--timeout</span> 10m</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pods <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-l</span> control-plane=elastic-operator</span></code></pre></div>
 <p>Expected: <code>elastic-operator-0  1/1 Running</code>.</p>
 <h3 id="05-free-gpu-check-run-again-right-before-each-install"><span class="num">0.5</span>
 Free-GPU check (run again right before each install)</h3>
@@ -1085,7 +1094,7 @@ verified (could not be tested without the cluster)</h3>
 <li><strong>8B NIM tag <code>1.8.3</code></strong>: chosen from NVIDIA's
 flywheel config and the NIM 1.8 support matrix; never started on this
 cluster's L40S.</li>
-<li><strong>Pulls from docker.io, docker.elastic.co,
+<li><strong>Pulls from docker.io,
 registry.redhat.io</strong> (and the IDMS effect): the pre-flight (0.3)
 tests them.</li>
 <li><strong>restricted-v2 at runtime</strong>: static checks pass for

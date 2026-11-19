@@ -102,6 +102,7 @@ seaweedfs:
 
 # --- Elasticsearch (ECK) vector DB, CPU only ---
 eck-elasticsearch:
+  image: docker.io/library/elasticsearch:9.3.0   # docker.elastic.co is blocked on the client cluster; same release from Docker Hub
   nodeSets:
   - name: default
     count: 1

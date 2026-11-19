@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Image pull check: proves the cluster's nodes can pull each NON-nvcr.io image the deployments
-# need (docker.io, docker.elastic.co, registry.redhat.io), plus one nvcr.io image as a control.
+# need (docker.io, registry.redhat.io), plus one nvcr.io image as a control.
 # Creates one tiny pod per image in the namespace (no GPU, explicit requests/limits),
 # reads its events (Pulled / Failed), then deletes ONLY the pods it created (label pull-check=nvaie).
 # Usage: deploy/scripts/pull-check.sh flywheel|rag|all   [namespace]
 set -uo pipefail
 WHAT="${1:-all}"; NS="${2:-nvaie-test}"
 FLYWHEEL_IMAGES=(
-  docker.elastic.co/elasticsearch/elasticsearch:8.12.2
+  docker.io/library/elasticsearch:8.12.2
   docker.io/library/mongo:7.0.14
   docker.io/library/redis:7.2.5-alpine
   docker.io/bitnamilegacy/postgresql:16.1.0-debian-11-r20
@@ -19,7 +19,8 @@ FLYWHEEL_IMAGES=(
   nvcr.io/nvidia/nemo-microservices/entity-store:25.08
 )
 RAG_IMAGES=(
-  docker.elastic.co/elasticsearch/elasticsearch:9.3.0
+  docker.io/library/elasticsearch:9.3.0
+  docker.io/elastic/eck-operator:3.3.2
   docker.io/library/redis:8.2.1
   docker.io/chrislusf/seaweedfs:3.73
   nvcr.io/nvidia/blueprint/rag-server:2.6.0
