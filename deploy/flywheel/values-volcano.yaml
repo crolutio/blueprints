@@ -1,0 +1,48 @@
+# =============================================================================
+# Volcano batch scheduler v1.9.0 - REQUIRED for NeMo Customizer in NeMo 25.8
+# (the NeMo Operator submits every fine-tuning job as a Volcano Job; the only other
+#  supported backend is Run:ai). CLUSTER-SCOPED: needs explicit client approval.
+#
+# Use ONLY if (a) the client approved it and (b) Volcano is not already on the cluster
+# (RUNBOOK 0.3: `oc get crd queues.scheduling.volcano.sh` must return NotFound).
+#
+#   -f values-nvaie-common.yaml -f values-layout-*.yaml -f values-volcano.yaml
+#
+# What it adds (all removed again by `helm uninstall`, except the CRDs and the
+# runtime-created Queue objects, which the runbook deletes explicitly):
+#   - 3 pods in nvaie-test: df-admission, df-controllers, df-scheduler (+ df-admission-init Job)
+#   - 7 CRDs (*.volcano.sh), 3 ClusterRoles + 3 ClusterRoleBindings
+#   - 4 MutatingWebhookConfigurations + 3 ValidatingWebhookConfigurations
+#   - at runtime the controller creates the cluster-scoped Queue "default" (and "root")
+#
+# Production safety (patched chart, custom.nvaie_restrict=true):
+#   - webhooks match ONLY namespace nvaie-test (upstream: every namespace except the
+#     release namespace, failurePolicy=Fail -> a dead admission pod would block pod
+#     creation cluster-wide). Volcano's own pods are excluded from its webhooks.
+#     Exception: Queue webhooks (Queues are cluster-scoped, namespaceSelector does not apply);
+#     they only affect Volcano Queue objects.
+#   - scheduler debug hostPath replaced by emptyDir; no system-cluster-critical priority class.
+#   - The Volcano scheduler only schedules pods that ask for schedulerName=volcano.
+# =============================================================================
+nemo-microservices-helm-chart:
+  volcano:
+    enabled: true
+    basic:
+      image_pull_policy: IfNotPresent
+      image_tag_version: "v1.9.0"
+    custom:
+      nvaie_restrict: true
+      metrics_enable: false
+      leader_elect_enable: false
+      admission_resources:
+        requests: {cpu: 50m, memory: 128Mi}
+        limits:   {cpu: 500m, memory: 512Mi}
+      controller_resources:
+        requests: {cpu: 100m, memory: 128Mi}
+        limits:   {cpu: "1",  memory: 1Gi}
+      scheduler_resources:
+        requests: {cpu: 100m, memory: 128Mi}
+        limits:   {cpu: "1",  memory: 1Gi}
+      default_sc:
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}

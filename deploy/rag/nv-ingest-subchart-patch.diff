@@ -1,0 +1,12 @@
+diff -ruN a/nv-ingest/templates/deployment.yaml b/nv-ingest/templates/deployment.yaml
+--- a/nv-ingest/templates/deployment.yaml	2026-03-16 22:39:41.000000000 +0400
++++ b/nv-ingest/templates/deployment.yaml	2026-11-19 15:32:37.537551322 +0400
+@@ -156,7 +156,7 @@
+           {{- if .Values.extraVolumeMounts }}
+           {{- range $k, $v := .Values.extraVolumeMounts }}
+             - name: {{ $k }}
+-              {{- toYaml $v | nindent 12 }}
++              {{- toYaml $v | nindent 14 }}
+           {{- end }}
+           {{- end }}
+       {{- with .Values.nodeSelector }}

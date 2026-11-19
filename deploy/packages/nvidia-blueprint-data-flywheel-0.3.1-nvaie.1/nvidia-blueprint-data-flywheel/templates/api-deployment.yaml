@@ -1,0 +1,113 @@
+---
+{{- if .Values.foundationalFlywheelServer.deployments.api.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.foundationalFlywheelServer.deployments.api.fullnameOverride }}-deployment
+  labels:
+    app: {{ .Values.foundationalFlywheelServer.deployments.api.fullnameOverride }}-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.foundationalFlywheelServer.deployments.api.fullnameOverride }}-deployment
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.foundationalFlywheelServer.deployments.api.fullnameOverride }}-deployment
+        {{- include "df.podLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.foundationalFlywheelServer.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      automountServiceAccountToken: false
+      {{- include "df.podSpecExtras" . | nindent 6 }}
+      {{- /* PATCH(nvaie): busybox init is redundant (emptyDir is writable); can be disabled */}}
+      {{- if ne (toString .Values.foundationalFlywheelServer.initDataFolder) "false" }}
+      initContainers:
+        - name: create-data-folder-for-dataset
+          image: busybox:1.28
+          command: ['sh', '-c', 'mkdir -p /data && chmod 755 /data']
+          volumeMounts:
+            - name: data-volume
+              mountPath: /data
+      {{- end }}
+      containers:
+        - name: api
+          image: "{{ .Values.foundationalFlywheelServer.image.repository }}:{{ .Values.foundationalFlywheelServer.image.tag }}"
+          imagePullPolicy: Always
+          {{- include "df.containerSecurityContext" . | nindent 10 }}
+          resources:
+            {{- toYaml .Values.foundationalFlywheelServer.deployments.api.resources | nindent 12 }}
+          ports:
+            - containerPort: {{ .Values.foundationalFlywheelServer.deployments.api.service.port }}
+          env:
+            {{- /* PATCH(nvaie): extra env, e.g. UV_NO_SYNC for restricted-v2 */}}
+            {{- with .Values.foundationalFlywheelServer.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            - name: ELASTICSEARCH_URL
+              value: {{ .Values.foundationalFlywheelServer.deployments.api.env.ELASTICSEARCH_URL | quote }}
+            - name: REDIS_URL
+              value: {{ .Values.foundationalFlywheelServer.deployments.api.env.REDIS_URL | quote }}
+            - name: MONGODB_URL
+              value: {{ .Values.foundationalFlywheelServer.deployments.api.env.MONGODB_URL | quote }}
+            - name: MONGODB_DB
+              value: {{ .Values.foundationalFlywheelServer.deployments.api.env.MONGODB_DB | quote }}
+            - name: COMPOSE_PROFILES
+              value: {{ .Values.profile.mlflow.COMPOSE_PROFILES | quote }}
+            - name: ES_COLLECTION_NAME
+              value: {{ .Values.foundationalFlywheelServer.deployments.api.env.ES_COLLECTION_NAME | quote }}
+            - name: NVIDIA_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.nvidiaApiSecret.name | default "nvidia-api" }}
+                  key: {{ .Values.nvidiaApiSecret.key | default "NVIDIA_API_KEY" }}{{ if .Values.secrets.optionalSecretRefs }}
+                  optional: true{{ end }}
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.hfSecret.name | default "hf-secret" }}
+                  key: {{ .Values.hfSecret.key | default "HF_TOKEN" }}{{ if .Values.secrets.optionalSecretRefs }}
+                  optional: true{{ end }}
+            - name: LLM_JUDGE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  {{ if or .Values.secrets.llmJudgeApiKey .Values.secrets.useLlmJudgeSecret }}
+                  name: {{ .Values.llmJudgeSecret.name | default "llm-judge-api" }}
+                  key: {{ .Values.llmJudgeSecret.key | default "LLM_JUDGE_API_KEY" }}{{ if .Values.secrets.optionalSecretRefs }}
+                  optional: true{{ end }}
+                  {{ else }}
+                  name: {{ .Values.nvidiaApiSecret.name | default "nvidia-api" }}
+                  key: {{ .Values.nvidiaApiSecret.key | default "NVIDIA_API_KEY" }}{{ if .Values.secrets.optionalSecretRefs }}
+                  optional: true{{ end }}
+                  {{ end }}
+            - name: EMB_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  {{ if .Values.secrets.embApiKey }}
+                  name: {{ .Values.embSecret.name | default "emb-api" }}
+                  key: {{ .Values.embSecret.key | default "EMB_API_KEY" }}{{ if .Values.secrets.optionalSecretRefs }}
+                  optional: true{{ end }}
+                  {{ else }}
+                  name: {{ .Values.nvidiaApiSecret.name | default "nvidia-api" }}
+                  key: {{ .Values.nvidiaApiSecret.key | default "NVIDIA_API_KEY" }}{{ if .Values.secrets.optionalSecretRefs }}
+                  optional: true{{ end }}
+                  {{ end }}
+          command:
+            {{- toYaml .Values.foundationalFlywheelServer.deployments.api.command | nindent 12 }}
+          volumeMounts:
+            - name: config-volume
+              mountPath: /legal/source/config/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            - name: data-volume
+              mountPath: /legal/source/data
+      volumes:
+        - name: config-volume
+          configMap:
+            name: df-config
+        - name: data-volume
+          emptyDir: {}
+{{- end }}

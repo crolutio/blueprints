@@ -1,0 +1,12 @@
+NVAIE Validation Note - Project Kestrel-42
+
+This document exists only to validate a Retrieval Augmented Generation (RAG) deployment.
+The facts below are invented, so a language model cannot know them from its training data.
+If the RAG system answers questions about them correctly, the answer came from this document.
+
+Project Kestrel-42 is an internal test programme run by the fictional Lumen Harbor Institute.
+The programme lead is Dr. Ottilie Varga.
+The programme started on 3 March 2031 and its budget is 4.7 million euros.
+The test site is located in the town of Brennmoor, next to the old salt warehouse.
+The official programme mascot is a teal-coloured heron called "Pim".
+The secret validation phrase for this deployment is "amber lantern seventeen".

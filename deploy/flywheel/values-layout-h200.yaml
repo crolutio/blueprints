@@ -1,0 +1,10 @@
+# Flywheel layout: PREFERRED - Customizer on H200.
+#   Customizer LoRA training pod -> pinned to H200 by this file.
+#   Candidate 1B NIM + 8B judge NIM -> any free GPU (deployment-management cannot set a
+#   nodeSelector; see RUNBOOK "NIM placement"). Use this file only if the free-GPU check
+#   shows >= 1 free H200 AND >= 3 free GPUs in total.
+nemo-microservices-helm-chart:
+  customizer:
+    customizerConfig:
+      nodeSelectors:
+        nvidia.com/gpu.product: NVIDIA-H200    # CONFIG

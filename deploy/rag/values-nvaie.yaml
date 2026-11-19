@@ -1,0 +1,244 @@
+# =============================================================================
+# NVIDIA RAG Blueprint v2.6.2 (chart v2.6.0) - nvaie-test overrides, barebones, text-only
+#
+# Layer order (as in NVIDIA's OpenShift Helm guide, plus this file last):
+#   helm upgrade --install rag chart -n nvaie-test \
+#     -f chart/values-openshift.yaml -f values-nvaie.yaml
+#
+# GPUs: 2 x L40S
+#   1 x LLM NIM        meta/llama-3.1-8b-instruct          (NIMService nim-llm)
+#   1 x Embedding NIM  nvidia/llama-nemotron-embed-1b-v2   (NIMService nemotron-embedding-ms)
+# Disabled: reranker, VLM embedder/reranker/VLM/captioning, all nv-ingest extraction NIMs
+# (page elements, graphic elements, table structure, OCR, nemotron-parse, audio),
+# Milvus, frontend, Routes, observability.
+#
+# CONFIG items: namespace (helm -n), StorageClass, Kueue label, nodeSelectors.
+# Requires on the cluster: NVIDIA NIM Operator (NIMCache/NIMService CRDs) and the ECK
+# operator (Elasticsearch CRD). Both cluster-scoped -> RUNBOOK 0.3.
+# =============================================================================
+
+# CONFIG: Kueue LocalQueue label ("" = off). Applies to rag-server, ingestor-server, NIM pods.
+kueue:
+  queueName: ""
+
+# --- OpenShift: keep the chart's anyuid RoleBinding (NVIDIA guide), but no external Routes.
+openshift:
+  enabled: true                 # renders RoleBinding rag-server-anyuid-scc -> NEEDS CLIENT APPROVAL
+  routes:
+    frontend: {enabled: false}
+    ragServer: {enabled: false} # validation is done in-cluster (oc exec / port-forward)
+
+# --- Secrets are pre-created by the runbook ---
+imagePullSecret:
+  name: ngc-registry-default
+  create: false
+ngcApiSecret:
+  name: ngc-api                 # key NGC_API_KEY
+  create: false
+
+nodeSelector: {}                # CONFIG: rag-server placement (CPU)
+
+resources:
+  requests: {cpu: 500m, memory: 2Gi}
+  limits:   {cpu: "4",  memory: 8Gi}
+server:
+  workers: 4
+
+envVars:
+  # LLM: llama-3.1-8b-instruct (not a reasoning model -> thinking off)
+  APP_LLM_MODELNAME: "meta/llama-3.1-8b-instruct"
+  APP_LLM_SERVERURL: "nim-llm:8000"
+  LLM_MAX_TOKENS: "1024"
+  LLM_ENABLE_THINKING: "false"
+  LLM_LOW_EFFORT: "false"
+  APP_QUERYREWRITER_MODELNAME: "meta/llama-3.1-8b-instruct"
+  APP_FILTEREXPRESSIONGENERATOR_MODELNAME: "meta/llama-3.1-8b-instruct"
+  REFLECTION_LLM: "meta/llama-3.1-8b-instruct"
+  # Text embedder (VL embedder disabled)
+  APP_EMBEDDINGS_SERVERURL: "nemotron-embedding-ms:8000/v1"
+  APP_EMBEDDINGS_MODELNAME: "nvidia/llama-nemotron-embed-1b-v2"
+  APP_EMBEDDINGS_DIMENSIONS: "2048"
+  # No reranker
+  ENABLE_RERANKER: "False"
+  APP_RANKING_SERVERURL: ""
+  ENABLE_GUARDRAILS: "False"
+
+# --- Ingestor server: text-only extraction ---
+ingestor-server:
+  imagePullSecret:
+    name: ngc-registry-default
+    create: false
+  nodeSelector: {}              # CONFIG
+  resources:
+    requests: {cpu: 500m, memory: 2Gi}
+    limits:   {cpu: "4",  memory: 8Gi}
+  envVars:
+    APP_EMBEDDINGS_SERVERURL: "nemotron-embedding-ms:8000/v1"
+    APP_EMBEDDINGS_MODELNAME: "nvidia/llama-nemotron-embed-1b-v2"
+    APP_EMBEDDINGS_DIMENSIONS: "2048"
+    APP_NVINGEST_EXTRACTTEXT: "True"
+    APP_NVINGEST_EXTRACTTABLES: "False"
+    APP_NVINGEST_EXTRACTCHARTS: "False"
+    APP_NVINGEST_EXTRACTINFOGRAPHICS: "False"
+    APP_NVINGEST_EXTRACTIMAGES: "False"
+    SUMMARY_LLM: "meta/llama-3.1-8b-instruct"
+  persistence:
+    storageClass: ocs-storagecluster-ceph-rbd   # CONFIG
+    size: 5Gi
+
+frontend:
+  enabled: false
+
+# --- SeaweedFS (S3 object store used by nv-ingest / ingestor) ---
+seaweedfs:
+  allInOne:
+    resources:
+      requests: {cpu: 100m, memory: 256Mi}
+      limits:   {cpu: "1",  memory: 1Gi}
+    data:
+      type: "persistentVolumeClaim"
+      storageClass: ocs-storagecluster-ceph-rbd # CONFIG
+      size: 5Gi
+
+# --- Elasticsearch (ECK) vector DB, CPU only ---
+eck-elasticsearch:
+  nodeSets:
+  - name: default
+    count: 1
+    config:
+      node.store.allow_mmap: false
+      xpack.security.enabled: false
+      xpack.security.http.ssl.enabled: false
+      xpack.security.transport.ssl.enabled: false
+    volumeClaimTemplates:
+    - metadata:
+        name: elasticsearch-data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: ocs-storagecluster-ceph-rbd   # CONFIG
+        resources:
+          requests:
+            storage: 5Gi
+    podTemplate:
+      metadata:
+        labels: {}              # add kueue.x-k8s.io/queue-name here if Kueue is required
+      spec:
+        initContainers:
+        - name: elastic-internal-init-filesystem
+          env:
+          - name: ES_JAVA_OPTS
+            value: "-Xms1g -Xmx1g"
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits:   {cpu: 500m, memory: 512Mi}
+        - name: elastic-internal-suspend
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits:   {cpu: 200m, memory: 128Mi}
+        containers:
+        - name: elasticsearch
+          env:
+          - name: ES_JAVA_OPTS
+            value: "-Xms1g -Xmx1g"
+          resources:
+            requests: {cpu: 500m, memory: 2Gi}
+            limits:   {cpu: "2",  memory: 2Gi}
+          readinessProbe:
+            exec:
+              command:
+              - bash
+              - -c
+              - |
+                curl -s http://localhost:9200/_cluster/health | grep -q '"status":"green"\|"status":"yellow"'
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+
+# --- NIMs (NIM Operator) ---
+nimOperator:
+  nim-llm:
+    enabled: true
+    image:
+      repository: nvcr.io/nim/meta/llama-3.1-8b-instruct
+      tag: "1.8.3"            # same tag as the flywheel judge (one image for both); 1x L40S TP1 profiles listed for NIM 1.8
+      pullPolicy: IfNotPresent
+    resources:
+      requests: {nvidia.com/gpu: 1, cpu: "2", memory: 24Gi}
+      limits:   {nvidia.com/gpu: 1, cpu: "8", memory: 48Gi}
+    cacheResources: {cpu: "1", memory: 4Gi}   # PATCH key: NIMCache download job
+    nodeSelector:
+      nvidia.com/gpu.product: NVIDIA-L40S      # CONFIG
+    tolerations: []
+    # Profile filter for the NIMCache download: single-GPU profiles for L40S only.
+    model:
+      tensorParallelism: "1"
+      gpus:
+      - product: "l40s"
+    storage:
+      pvc:
+        create: true
+        size: "50Gi"
+        volumeAccessMode: ReadWriteOnce
+        storageClass: ocs-storagecluster-ceph-rbd   # CONFIG
+      sharedMemorySizeLimit: "2Gi"
+    env:
+      - name: NIM_HTTP_API_PORT
+        value: "8000"
+      - name: NIM_SERVED_MODEL_NAME
+        value: "meta/llama-3.1-8b-instruct"
+
+  nvidia-nim-llama-nemotron-embed-1b-v2:
+    enabled: true
+    resources:
+      requests: {nvidia.com/gpu: 1, cpu: "1", memory: 8Gi}
+      limits:   {nvidia.com/gpu: 1, cpu: "4", memory: 16Gi}
+    cacheResources: {cpu: "1", memory: 2Gi}   # PATCH key: NIMCache download job
+    nodeSelector:
+      nvidia.com/gpu.product: NVIDIA-L40S      # CONFIG
+    storage:
+      pvc:
+        create: true
+        size: "20Gi"
+        volumeAccessMode: ReadWriteOnce
+        storageClass: ocs-storagecluster-ceph-rbd   # CONFIG
+
+  nvidia-nim-llama-nemotron-embed-vl-1b-v2: {enabled: false}
+  nvidia-nim-llama-nemotron-rerank-1b-v2:   {enabled: false}
+  nvidia-nim-llama-nemotron-rerank-vl-1b-v2: {enabled: false}
+  nim-vlm: {enabled: false}
+  nim-vlm-captioning: {enabled: false}
+
+# --- nv-ingest: text extraction only, no extraction NIMs ---
+nv-ingest:
+  imagePullSecrets:
+    - name: ngc-registry-default
+  podLabels: {}                 # add kueue.x-k8s.io/queue-name here if Kueue is required
+  resources:
+    requests: {cpu: "2", memory: 8Gi}
+    limits:   {cpu: "8", memory: 16Gi}
+  envVars:
+    COMPONENTS_TO_READY_CHECK: ""          # do not wait for the disabled extraction NIMs
+    INSTALL_AUDIO_EXTRACTION_DEPS: "false" # avoid runtime package downloads
+    APP_EMBEDDINGS_SERVERURL: "nemotron-embedding-ms:8000/v1"
+    APP_EMBEDDINGS_MODELNAME: "nvidia/llama-nemotron-embed-1b-v2"
+    EMBEDDING_NIM_ENDPOINT: "http://nemotron-embedding-ms:8000/v1"
+    EMBEDDING_NIM_MODEL_NAME: "nvidia/llama-nemotron-embed-1b-v2"
+  milvusDeployed: false
+  redis:
+    architecture: standalone    # upstream: master + 1 replica
+    master:
+      persistence: {enabled: false}       # queue only, ephemeral is fine for this test
+      podSecurityContext: {enabled: false}        # upstream fixed UID/fsGroup 1001 -> let restricted-v2 assign
+      containerSecurityContext: {enabled: false}
+      resources:
+        requests: {cpu: 100m, memory: 256Mi}
+        limits:   {cpu: "1",  memory: 1Gi}
+  nimOperator:
+    embedqa: {enabled: false}
+    ocr: {enabled: false}
+    graphic_elements: {enabled: false}
+    page_elements: {enabled: false}
+    table_structure: {enabled: false}
+    nemotron_parse: {enabled: false}
+    audio: {enabled: false}

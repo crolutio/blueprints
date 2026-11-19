@@ -1,0 +1,9 @@
+# Live `helm get all` dumps contain real generated credentials
+# (DB passwords, JWT/encryption keys, S3 keys, an SFTP SSH private key).
+# Never commit these. Regenerate with: helm get all <release> ... > deploy/reports/<name>.yaml
+deploy/reports/
+
+# editor / os noise
+.DS_Store
+*.swp
+*~

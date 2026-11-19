@@ -1,0 +1,568 @@
+diff -ruN '--exclude=charts' data-flywheel/deploy/helm/data-flywheel/Chart.yaml deploy/flywheel/chart/Chart.yaml
+--- data-flywheel/deploy/helm/data-flywheel/Chart.yaml	2026-11-19 15:18:45.704819297 +0400
++++ deploy/flywheel/chart/Chart.yaml	2026-11-19 15:32:22.991767961 +0400
+@@ -7,5 +7,5 @@
+   repository: https://helm.ngc.nvidia.com/nvidia/nemo-microservices
+   version: '25.8.0'
+ type: application
+-version: "0.3.1"
++version: "0.3.1-nvaie.1"
+ appVersion: "0.3.1"
+diff -ruN '--exclude=charts' data-flywheel/deploy/helm/data-flywheel/templates/api-deployment.yaml deploy/flywheel/chart/templates/api-deployment.yaml
+--- data-flywheel/deploy/helm/data-flywheel/templates/api-deployment.yaml	2026-11-19 15:18:45.704965330 +0400
++++ deploy/flywheel/chart/templates/api-deployment.yaml	2026-11-19 15:33:56.458401086 +0400
+@@ -15,12 +15,16 @@
+     metadata:
+       labels:
+         app: {{ .Values.foundationalFlywheelServer.deployments.api.fullnameOverride }}-deployment
++        {{- include "df.podLabels" . | nindent 8 }}
+     spec:
+       {{- with .Values.foundationalFlywheelServer.imagePullSecrets }}
+       imagePullSecrets:
+         {{- toYaml . | nindent 8 }}
+       {{- end }}
+       automountServiceAccountToken: false
++      {{- include "df.podSpecExtras" . | nindent 6 }}
++      {{- /* PATCH(nvaie): busybox init is redundant (emptyDir is writable); can be disabled */}}
++      {{- if ne (toString .Values.foundationalFlywheelServer.initDataFolder) "false" }}
+       initContainers:
+         - name: create-data-folder-for-dataset
+           image: busybox:1.28
+@@ -28,15 +32,21 @@
+           volumeMounts:
+             - name: data-volume
+               mountPath: /data
++      {{- end }}
+       containers:
+         - name: api
+           image: "{{ .Values.foundationalFlywheelServer.image.repository }}:{{ .Values.foundationalFlywheelServer.image.tag }}"
+           imagePullPolicy: Always
++          {{- include "df.containerSecurityContext" . | nindent 10 }}
+           resources:
+             {{- toYaml .Values.foundationalFlywheelServer.deployments.api.resources | nindent 12 }}
+           ports:
+             - containerPort: {{ .Values.foundationalFlywheelServer.deployments.api.service.port }}
+           env:
++            {{- /* PATCH(nvaie): extra env, e.g. UV_NO_SYNC for restricted-v2 */}}
++            {{- with .Values.foundationalFlywheelServer.extraEnv }}
++            {{- toYaml . | nindent 12 }}
++            {{- end }}
+             - name: ELASTICSEARCH_URL
+               value: {{ .Values.foundationalFlywheelServer.deployments.api.env.ELASTICSEARCH_URL | quote }}
+             - name: REDIS_URL
+@@ -53,31 +63,37 @@
+               valueFrom:
+                 secretKeyRef:
+                   name: {{ .Values.nvidiaApiSecret.name | default "nvidia-api" }}
+-                  key: {{ .Values.nvidiaApiSecret.key | default "NVIDIA_API_KEY" }}
++                  key: {{ .Values.nvidiaApiSecret.key | default "NVIDIA_API_KEY" }}{{ if .Values.secrets.optionalSecretRefs }}
++                  optional: true{{ end }}
+             - name: HF_TOKEN
+               valueFrom:
+                 secretKeyRef:
+                   name: {{ .Values.hfSecret.name | default "hf-secret" }}
+-                  key: {{ .Values.hfSecret.key | default "HF_TOKEN" }}
++                  key: {{ .Values.hfSecret.key | default "HF_TOKEN" }}{{ if .Values.secrets.optionalSecretRefs }}
++                  optional: true{{ end }}
+             - name: LLM_JUDGE_API_KEY
+               valueFrom:
+                 secretKeyRef:
+-                  {{ if .Values.secrets.llmJudgeApiKey }}
++                  {{ if or .Values.secrets.llmJudgeApiKey .Values.secrets.useLlmJudgeSecret }}
+                   name: {{ .Values.llmJudgeSecret.name | default "llm-judge-api" }}
+-                  key: {{ .Values.llmJudgeSecret.key | default "LLM_JUDGE_API_KEY" }}
++                  key: {{ .Values.llmJudgeSecret.key | default "LLM_JUDGE_API_KEY" }}{{ if .Values.secrets.optionalSecretRefs }}
++                  optional: true{{ end }}
+                   {{ else }}
+                   name: {{ .Values.nvidiaApiSecret.name | default "nvidia-api" }}
+-                  key: {{ .Values.nvidiaApiSecret.key | default "NVIDIA_API_KEY" }}
++                  key: {{ .Values.nvidiaApiSecret.key | default "NVIDIA_API_KEY" }}{{ if .Values.secrets.optionalSecretRefs }}
++                  optional: true{{ end }}
+                   {{ end }}
+             - name: EMB_API_KEY
+               valueFrom:
+                 secretKeyRef:
+                   {{ if .Values.secrets.embApiKey }}
+                   name: {{ .Values.embSecret.name | default "emb-api" }}
+-                  key: {{ .Values.embSecret.key | default "EMB_API_KEY" }}
++                  key: {{ .Values.embSecret.key | default "EMB_API_KEY" }}{{ if .Values.secrets.optionalSecretRefs }}
++                  optional: true{{ end }}
+                   {{ else }}
+                   name: {{ .Values.nvidiaApiSecret.name | default "nvidia-api" }}
+-                  key: {{ .Values.nvidiaApiSecret.key | default "NVIDIA_API_KEY" }}
++                  key: {{ .Values.nvidiaApiSecret.key | default "NVIDIA_API_KEY" }}{{ if .Values.secrets.optionalSecretRefs }}
++                  optional: true{{ end }}
+                   {{ end }}
+           command:
+             {{- toYaml .Values.foundationalFlywheelServer.deployments.api.command | nindent 12 }}
+diff -ruN '--exclude=charts' data-flywheel/deploy/helm/data-flywheel/templates/celeryParentWorker-deployment.yaml deploy/flywheel/chart/templates/celeryParentWorker-deployment.yaml
+--- data-flywheel/deploy/helm/data-flywheel/templates/celeryParentWorker-deployment.yaml	2026-11-19 15:18:45.704965330 +0400
++++ deploy/flywheel/chart/templates/celeryParentWorker-deployment.yaml	2026-11-19 15:33:56.458939967 +0400
+@@ -13,21 +13,28 @@
+     metadata:
+       labels:
+         app: {{ .Values.foundationalFlywheelServer.deployments.celeryParentWorker.fullnameOverride }}-deployment
++        {{- include "df.podLabels" . | nindent 8 }}
+     spec:
+       {{- with .Values.foundationalFlywheelServer.imagePullSecrets }}
+       imagePullSecrets:
+         {{- toYaml . | nindent 8 }}
+       {{- end }}
+       automountServiceAccountToken: false
++      {{- include "df.podSpecExtras" . | nindent 6 }}
+       containers:
+         - name: celery-parent-worker
+           image: "{{ .Values.foundationalFlywheelServer.image.repository }}:{{ .Values.foundationalFlywheelServer.image.tag }}"
+           imagePullPolicy: Always
++          {{- include "df.containerSecurityContext" . | nindent 10 }}
+           resources:
+             {{- toYaml .Values.foundationalFlywheelServer.deployments.celeryParentWorker.resources | nindent 12 }}
+           ports:
+             - containerPort: 8000
+           env:
++            {{- /* PATCH(nvaie): extra env, e.g. UV_NO_SYNC for restricted-v2 */}}
++            {{- with .Values.foundationalFlywheelServer.extraEnv }}
++            {{- toYaml . | nindent 12 }}
++            {{- end }}
+             - name: ELASTICSEARCH_URL
+               value: {{ .Values.foundationalFlywheelServer.deployments.celeryParentWorker.env.ELASTICSEARCH_URL | quote }}
+             - name: REDIS_URL
+@@ -44,26 +51,31 @@
+               valueFrom:
+                 secretKeyRef:
+                   name: {{ .Values.nvidiaApiSecret.name | default "nvidia-api" }}
+-                  key: {{ .Values.nvidiaApiSecret.key | default "NVIDIA_API_KEY" }}
++                  key: {{ .Values.nvidiaApiSecret.key | default "NVIDIA_API_KEY" }}{{ if .Values.secrets.optionalSecretRefs }}
++                  optional: true{{ end }}
+             - name: LLM_JUDGE_API_KEY
+               valueFrom:
+                 secretKeyRef:
+-                  {{ if .Values.secrets.llmJudgeApiKey }}
++                  {{ if or .Values.secrets.llmJudgeApiKey .Values.secrets.useLlmJudgeSecret }}
+                   name: {{ .Values.llmJudgeSecret.name | default "llm-judge-api" }}
+-                  key: {{ .Values.llmJudgeSecret.key | default "LLM_JUDGE_API_KEY" }}
++                  key: {{ .Values.llmJudgeSecret.key | default "LLM_JUDGE_API_KEY" }}{{ if .Values.secrets.optionalSecretRefs }}
++                  optional: true{{ end }}
+                   {{ else }}
+                   name: {{ .Values.nvidiaApiSecret.name | default "nvidia-api" }}
+-                  key: {{ .Values.nvidiaApiSecret.key | default "NVIDIA_API_KEY" }}
++                  key: {{ .Values.nvidiaApiSecret.key | default "NVIDIA_API_KEY" }}{{ if .Values.secrets.optionalSecretRefs }}
++                  optional: true{{ end }}
+                   {{ end }}
+             - name: EMB_API_KEY
+               valueFrom:
+                 secretKeyRef:
+                   {{ if .Values.secrets.embApiKey }}
+                   name: {{ .Values.embSecret.name | default "emb-api" }}
+-                  key: {{ .Values.embSecret.key | default "EMB_API_KEY" }}
++                  key: {{ .Values.embSecret.key | default "EMB_API_KEY" }}{{ if .Values.secrets.optionalSecretRefs }}
++                  optional: true{{ end }}
+                   {{ else }}
+                   name: {{ .Values.nvidiaApiSecret.name | default "nvidia-api" }}
+-                  key: {{ .Values.nvidiaApiSecret.key | default "NVIDIA_API_KEY" }}
++                  key: {{ .Values.nvidiaApiSecret.key | default "NVIDIA_API_KEY" }}{{ if .Values.secrets.optionalSecretRefs }}
++                  optional: true{{ end }}
+                   {{ end }}
+           command:
+             {{- toYaml .Values.foundationalFlywheelServer.deployments.celeryParentWorker.command | nindent 12 }}
+diff -ruN '--exclude=charts' data-flywheel/deploy/helm/data-flywheel/templates/celeryWorker-deployment.yaml deploy/flywheel/chart/templates/celeryWorker-deployment.yaml
+--- data-flywheel/deploy/helm/data-flywheel/templates/celeryWorker-deployment.yaml	2026-11-19 15:18:45.704965330 +0400
++++ deploy/flywheel/chart/templates/celeryWorker-deployment.yaml	2026-11-19 15:33:56.458885391 +0400
+@@ -15,21 +15,28 @@
+     metadata:
+       labels:
+         app: {{ .Values.foundationalFlywheelServer.deployments.celeryWorker.fullnameOverride }}-deployment
++        {{- include "df.podLabels" . | nindent 8 }}
+     spec:
+       {{- with .Values.foundationalFlywheelServer.imagePullSecrets }}
+       imagePullSecrets:
+         {{- toYaml . | nindent 8 }}
+       {{- end }}
+       automountServiceAccountToken: false
++      {{- include "df.podSpecExtras" . | nindent 6 }}
+       containers:
+         - name: celery-worker
+           image: "{{ .Values.foundationalFlywheelServer.image.repository }}:{{ .Values.foundationalFlywheelServer.image.tag }}"
+           imagePullPolicy: Always
++          {{- include "df.containerSecurityContext" . | nindent 10 }}
+           resources:
+             {{- toYaml .Values.foundationalFlywheelServer.deployments.celeryWorker.resources | nindent 12 }}
+           ports:
+             - containerPort: 8000
+           env:
++            {{- /* PATCH(nvaie): extra env, e.g. UV_NO_SYNC for restricted-v2 */}}
++            {{- with .Values.foundationalFlywheelServer.extraEnv }}
++            {{- toYaml . | nindent 12 }}
++            {{- end }}
+             - name: ELASTICSEARCH_URL
+               value: {{ .Values.foundationalFlywheelServer.deployments.celeryWorker.env.ELASTICSEARCH_URL | quote }}
+             - name: REDIS_URL
+@@ -46,26 +53,31 @@
+               valueFrom:
+                 secretKeyRef:
+                   name: {{ .Values.nvidiaApiSecret.name | default "nvidia-api" }}
+-                  key: {{ .Values.nvidiaApiSecret.key | default "NVIDIA_API_KEY" }}
++                  key: {{ .Values.nvidiaApiSecret.key | default "NVIDIA_API_KEY" }}{{ if .Values.secrets.optionalSecretRefs }}
++                  optional: true{{ end }}
+             - name: LLM_JUDGE_API_KEY
+               valueFrom:
+                 secretKeyRef:
+-                  {{ if .Values.secrets.llmJudgeApiKey }}
++                  {{ if or .Values.secrets.llmJudgeApiKey .Values.secrets.useLlmJudgeSecret }}
+                   name: {{ .Values.llmJudgeSecret.name | default "llm-judge-api" }}
+-                  key: {{ .Values.llmJudgeSecret.key | default "LLM_JUDGE_API_KEY" }}
++                  key: {{ .Values.llmJudgeSecret.key | default "LLM_JUDGE_API_KEY" }}{{ if .Values.secrets.optionalSecretRefs }}
++                  optional: true{{ end }}
+                   {{ else }}
+                   name: {{ .Values.nvidiaApiSecret.name | default "nvidia-api" }}
+-                  key: {{ .Values.nvidiaApiSecret.key | default "NVIDIA_API_KEY" }}
++                  key: {{ .Values.nvidiaApiSecret.key | default "NVIDIA_API_KEY" }}{{ if .Values.secrets.optionalSecretRefs }}
++                  optional: true{{ end }}
+                   {{ end }}
+             - name: EMB_API_KEY
+               valueFrom:
+                 secretKeyRef:
+                   {{ if .Values.secrets.embApiKey }}
+                   name: {{ .Values.embSecret.name | default "emb-api" }}
+-                  key: {{ .Values.embSecret.key | default "EMB_API_KEY" }}
++                  key: {{ .Values.embSecret.key | default "EMB_API_KEY" }}{{ if .Values.secrets.optionalSecretRefs }}
++                  optional: true{{ end }}
+                   {{ else }}
+                   name: {{ .Values.nvidiaApiSecret.name | default "nvidia-api" }}
+-                  key: {{ .Values.nvidiaApiSecret.key | default "NVIDIA_API_KEY" }}
++                  key: {{ .Values.nvidiaApiSecret.key | default "NVIDIA_API_KEY" }}{{ if .Values.secrets.optionalSecretRefs }}
++                  optional: true{{ end }}
+                   {{ end }}
+           command:
+             {{- toYaml .Values.foundationalFlywheelServer.deployments.celeryWorker.command | nindent 12 }}
+diff -ruN '--exclude=charts' data-flywheel/deploy/helm/data-flywheel/templates/elasticsearch-deployment.yaml deploy/flywheel/chart/templates/elasticsearch-deployment.yaml
+--- data-flywheel/deploy/helm/data-flywheel/templates/elasticsearch-deployment.yaml	2026-11-19 15:18:45.704965330 +0400
++++ deploy/flywheel/chart/templates/elasticsearch-deployment.yaml	2026-11-19 15:32:22.960218481 +0400
+@@ -15,12 +15,15 @@
+     metadata:
+       labels:
+         app: {{ .Values.elasticsearch.fullnameOverride }}-deployment
++        {{- include "df.podLabels" . | nindent 8 }}
+     spec:
+       automountServiceAccountToken: false
++      {{- include "df.podSpecExtras" . | nindent 6 }}
+       containers:
+         - name: elasticsearch
+           image: "{{ .Values.elasticsearch.image.repository }}:{{ .Values.elasticsearch.image.tag }}"
+           imagePullPolicy: Always
++          {{- include "df.containerSecurityContext" . | nindent 10 }}
+           resources:
+             {{- toYaml .Values.elasticsearch.resources | nindent 12 }}
+           ports:
+@@ -30,4 +33,17 @@
+             - name: {{ $key }}
+               value: {{ $val | quote }}
+             {{- end }}
++          {{- /* PATCH(nvaie): writable emptyDir data dirs so a random restricted-v2 UID can write */}}
++          {{- with .Values.elasticsearch.dataDirs }}
++          volumeMounts:
++            {{- range $i, $p := . }}
++            - name: data-{{ $i }}
++              mountPath: {{ $p }}
++            {{- end }}
++      volumes:
++            {{- range $i, $p := . }}
++        - name: data-{{ $i }}
++          emptyDir: {}
++            {{- end }}
++          {{- end }}
+ {{- end }}
+diff -ruN '--exclude=charts' data-flywheel/deploy/helm/data-flywheel/templates/_helpers.tpl deploy/flywheel/chart/templates/_helpers.tpl
+--- data-flywheel/deploy/helm/data-flywheel/templates/_helpers.tpl	2026-11-19 15:18:45.704819297 +0400
++++ deploy/flywheel/chart/templates/_helpers.tpl	2026-11-19 15:32:22.959066432 +0400
+@@ -60,3 +60,30 @@
+ {{- default "default" .Values.serviceAccount.name }}
+ {{- end }}
+ {{- end }}
++
++{{/* PATCH(nvaie): optional Kueue queue label for pod templates */}}
++{{- define "df.podLabels" -}}
++{{- with .Values.kueue.queueName }}
++kueue.x-k8s.io/queue-name: {{ . | quote }}
++{{- end }}
++{{- end }}
++
++{{/* PATCH(nvaie): optional nodeSelector + pod securityContext for the CPU pods of this chart */}}
++{{- define "df.podSpecExtras" -}}
++{{- with .Values.cpuNodeSelector }}
++nodeSelector:
++  {{- toYaml . | nindent 2 }}
++{{- end }}
++{{- with .Values.podSecurityContext }}
++securityContext:
++  {{- toYaml . | nindent 2 }}
++{{- end }}
++{{- end }}
++
++{{/* PATCH(nvaie): container securityContext */}}
++{{- define "df.containerSecurityContext" -}}
++{{- with .Values.containerSecurityContext }}
++securityContext:
++  {{- toYaml . | nindent 2 }}
++{{- end }}
++{{- end }}
+diff -ruN '--exclude=charts' data-flywheel/deploy/helm/data-flywheel/templates/mongodb-deployment.yaml deploy/flywheel/chart/templates/mongodb-deployment.yaml
+--- data-flywheel/deploy/helm/data-flywheel/templates/mongodb-deployment.yaml	2026-11-19 15:18:45.704965330 +0400
++++ deploy/flywheel/chart/templates/mongodb-deployment.yaml	2026-11-19 15:32:22.960269473 +0400
+@@ -15,14 +15,30 @@
+     metadata:
+       labels:
+         app: {{ .Values.mongodb.fullnameOverride }}-deployment
++        {{- include "df.podLabels" . | nindent 8 }}
+     spec:
+       automountServiceAccountToken: false
++      {{- include "df.podSpecExtras" . | nindent 6 }}
+       containers:
+         - name: mongodb
+           image: "{{ .Values.mongodb.image.repository }}:{{ .Values.mongodb.image.tag }}"
+           imagePullPolicy: Always
++          {{- include "df.containerSecurityContext" . | nindent 10 }}
+           resources:
+             {{- toYaml .Values.mongodb.resources | nindent 12 }}
+           ports:
+             - containerPort: {{ .Values.mongodb.service.port }}
++          {{- /* PATCH(nvaie): writable emptyDir data dirs so a random restricted-v2 UID can write */}}
++          {{- with .Values.mongodb.dataDirs }}
++          volumeMounts:
++            {{- range $i, $p := . }}
++            - name: data-{{ $i }}
++              mountPath: {{ $p }}
++            {{- end }}
++      volumes:
++            {{- range $i, $p := . }}
++        - name: data-{{ $i }}
++          emptyDir: {}
++            {{- end }}
++          {{- end }}
+ {{- end }}
+diff -ruN '--exclude=charts' data-flywheel/deploy/helm/data-flywheel/templates/nemo-gateway.yaml deploy/flywheel/chart/templates/nemo-gateway.yaml
+--- data-flywheel/deploy/helm/data-flywheel/templates/nemo-gateway.yaml	1970-01-01 04:00:00.000000000 +0400
++++ deploy/flywheel/chart/templates/nemo-gateway.yaml	2026-11-19 15:32:22.964895287 +0400
+@@ -0,0 +1,109 @@
++{{- /*
++PATCH(nvaie): NEW FILE. In-cluster path router for the NeMo APIs.
++The flywheel server sends every NeMo call (customizer, evaluator, deployment-management,
++entity-store) to ONE base URL (nmp_config.nemo_base_url). Upstream solves this with an
++Ingress on fake hosts (nemo.test). This CPU-only nginx pod reproduces the same path map
++(copied from the upstream NeMo 25.8 Ingress) inside the namespace, so nothing is exposed
++outside the cluster. No GPU.
++*/ -}}
++{{- if .Values.nemoGateway.enabled }}
++apiVersion: v1
++kind: ConfigMap
++metadata:
++  name: nemo-gateway-config
++  namespace: {{ .Release.Namespace }}
++data:
++  nginx.conf: |
++    worker_processes 1;
++    pid /tmp/nginx.pid;
++    error_log /dev/stderr warn;
++    events { worker_connections 256; }
++    http {
++      access_log /dev/stdout;
++      client_body_temp_path /tmp/client_body;
++      proxy_temp_path       /tmp/proxy;
++      fastcgi_temp_path     /tmp/fastcgi;
++      uwsgi_temp_path       /tmp/uwsgi;
++      scgi_temp_path        /tmp/scgi;
++      client_max_body_size 0;
++      proxy_read_timeout 600s;
++      proxy_send_timeout 600s;
++      proxy_http_version 1.1;
++      proxy_set_header Host $host;
++      server {
++        listen 8080;
++        location = /healthz          { return 200 "ok\n"; }
++        location /v1/namespaces      { proxy_pass http://nemo-entity-store:8000; }
++        location /v1/projects        { proxy_pass http://nemo-entity-store:8000; }
++        location /v1/datasets        { proxy_pass http://nemo-entity-store:8000; }
++        location /v1/repos           { proxy_pass http://nemo-entity-store:8000; }
++        location /v1/models          { proxy_pass http://nemo-entity-store:8000; }
++        location /v1/customization   { proxy_pass http://nemo-customizer:8000; }
++        location /v1/evaluation      { proxy_pass http://nemo-evaluator:7331; }
++        location /v1/deployment      { proxy_pass http://nemo-deployment-management:8000; }
++      }
++    }
++---
++apiVersion: apps/v1
++kind: Deployment
++metadata:
++  name: nemo-gateway
++  namespace: {{ .Release.Namespace }}
++  labels:
++    app: nemo-gateway
++spec:
++  replicas: 1
++  selector:
++    matchLabels:
++      app: nemo-gateway
++  template:
++    metadata:
++      labels:
++        app: nemo-gateway
++        {{- include "df.podLabels" . | nindent 8 }}
++      annotations:
++        checksum/config: {{ .Values.nemoGateway | toJson | sha256sum }}
++    spec:
++      automountServiceAccountToken: false
++      {{- include "df.podSpecExtras" . | nindent 6 }}
++      containers:
++        - name: nginx
++          image: {{ .Values.nemoGateway.image | quote }}
++          imagePullPolicy: IfNotPresent
++          {{- include "df.containerSecurityContext" . | nindent 10 }}
++          command: ["nginx", "-g", "daemon off;", "-c", "/etc/nemo-gateway/nginx.conf"]
++          ports:
++            - containerPort: 8080
++          readinessProbe:
++            httpGet:
++              path: /healthz
++              port: 8080
++            periodSeconds: 10
++          resources:
++            {{- toYaml .Values.nemoGateway.resources | nindent 12 }}
++          volumeMounts:
++            - name: config
++              mountPath: /etc/nemo-gateway
++            - name: tmp
++              mountPath: /tmp
++      volumes:
++        - name: config
++          configMap:
++            name: nemo-gateway-config
++        - name: tmp
++          emptyDir: {}
++---
++apiVersion: v1
++kind: Service
++metadata:
++  name: nemo-gateway
++  namespace: {{ .Release.Namespace }}
++spec:
++  type: ClusterIP
++  selector:
++    app: nemo-gateway
++  ports:
++    - name: http
++      port: 80
++      targetPort: 8080
++{{- end }}
+diff -ruN '--exclude=charts' data-flywheel/deploy/helm/data-flywheel/templates/redis-deployment.yaml deploy/flywheel/chart/templates/redis-deployment.yaml
+--- data-flywheel/deploy/helm/data-flywheel/templates/redis-deployment.yaml	2026-11-19 15:18:45.704965330 +0400
++++ deploy/flywheel/chart/templates/redis-deployment.yaml	2026-11-19 15:32:22.960315153 +0400
+@@ -15,14 +15,30 @@
+     metadata:
+       labels:
+         app: {{ .Values.redis.fullnameOverride }}-deployment
++        {{- include "df.podLabels" . | nindent 8 }}
+     spec:
+       automountServiceAccountToken: false
++      {{- include "df.podSpecExtras" . | nindent 6 }}
+       containers:
+         - name: redis
+           image: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
+           imagePullPolicy: Always
++          {{- include "df.containerSecurityContext" . | nindent 10 }}
+           resources:
+             {{- toYaml .Values.redis.resources | nindent 12 }}
+           ports:
+             - containerPort: {{ .Values.redis.service.port }}
++          {{- /* PATCH(nvaie): writable emptyDir data dirs so a random restricted-v2 UID can write */}}
++          {{- with .Values.redis.dataDirs }}
++          volumeMounts:
++            {{- range $i, $p := . }}
++            - name: data-{{ $i }}
++              mountPath: {{ $p }}
++            {{- end }}
++      volumes:
++            {{- range $i, $p := . }}
++        - name: data-{{ $i }}
++          emptyDir: {}
++            {{- end }}
++          {{- end }}
+ {{- end }}
+diff -ruN '--exclude=charts' data-flywheel/deploy/helm/data-flywheel/templates/secrets.yaml deploy/flywheel/chart/templates/secrets.yaml
+--- data-flywheel/deploy/helm/data-flywheel/templates/secrets.yaml	2026-11-19 15:18:45.704965330 +0400
++++ deploy/flywheel/chart/templates/secrets.yaml	2026-11-19 15:32:22.959140736 +0400
+@@ -1,3 +1,5 @@
++{{- /* PATCH(nvaie): secrets.create=false -> secrets are pre-created by the runbook */}}
++{{- if ne (toString .Values.secrets.create) "false" }}
+ {{- if .Values.secrets.ngcApiKey }}
+ {{- $root := . }}
+ {{- range .Values.imagePullSecrets }}
+@@ -90,3 +92,4 @@
+ data:
+   EMB_API_KEY: {{ .Values.secrets.embApiKey | b64enc }}
+ {{- end }}
++{{- end }}
+diff -ruN '--exclude=charts' data-flywheel/deploy/helm/data-flywheel/values.yaml deploy/flywheel/chart/values.yaml
+--- data-flywheel/deploy/helm/data-flywheel/values.yaml	2026-11-19 15:18:45.704965330 +0400
++++ deploy/flywheel/chart/values.yaml	2026-11-19 15:33:56.459017935 +0400
+@@ -46,6 +46,9 @@
+ #   --set secrets.hfToken=$HF_TOKEN)
+ # Note: if you want not to set those via command line during helm install like above, you must create those Kubernetes secrets manually first
+ secrets:
++  create: true             # PATCH(nvaie): false = secrets are pre-created (runbook)
++  useLlmJudgeSecret: false # PATCH(nvaie): true = LLM_JUDGE_API_KEY comes from llmJudgeSecret even if llmJudgeApiKey is empty
++  optionalSecretRefs: false # PATCH(nvaie): true = secretKeyRefs are optional (missing secret -> env var unset)
+   ngcApiKey: ""  # Set this to your NGC API key
+   nvidiaApiKey: "" # Set this to your NVIDIA API key
+   hfToken: "" # Set this to your HF Token
+@@ -59,6 +62,7 @@
+ 
+ # Elasticsearch configuration
+ elasticsearch:
++  dataDirs: []   # PATCH(nvaie): emptyDir mount paths
+   enabled: true
+   image:
+     repository: docker.elastic.co/elasticsearch/elasticsearch
+@@ -127,6 +131,7 @@
+ 
+ # MongoDB configuration
+ mongodb:
++  dataDirs: []   # PATCH(nvaie): emptyDir mount paths
+   enabled: true
+   fullnameOverride: "df-mongodb"
+   image:
+@@ -147,6 +152,7 @@
+ 
+ # Redis configuration
+ redis:
++  dataDirs: []   # PATCH(nvaie): emptyDir mount paths
+   enabled: true
+   image:
+     repository: redis
+@@ -172,6 +178,8 @@
+     tag: "0.3.0"
+   imagePullSecrets:
+     - name: nvcrimagepullsecret
++  extraEnv: []             # PATCH(nvaie): extra env vars for api/celery pods
++  initDataFolder: true     # PATCH(nvaie): false = drop the busybox:1.28 init container of the API pod
+   # Deployments of the foundational flywheel server
+   deployments:
+     # api is the main service that handles the requests and returns the responses
+@@ -568,3 +576,18 @@
+   deployment-management:
+     deployments:
+       defaultStorageClass: standard
++
++# ---------------------------------------------------------------------------
++# PATCH(nvaie): keys added by the patched copy. Defaults reproduce upstream.
++# ---------------------------------------------------------------------------
++kueue:
++  queueName: ""            # set to add label kueue.x-k8s.io/queue-name to this chart's pods
++cpuNodeSelector: {}        # optional nodeSelector for this chart's CPU pods
++podSecurityContext: {}     # pod securityContext for this chart's pods
++containerSecurityContext: {}
++nemoGateway:
++  enabled: false
++  image: "registry.redhat.io/ubi9/nginx-126:1-1777855212"
++  resources:
++    requests: {cpu: 50m, memory: 64Mi}
++    limits: {cpu: 500m, memory: 256Mi}

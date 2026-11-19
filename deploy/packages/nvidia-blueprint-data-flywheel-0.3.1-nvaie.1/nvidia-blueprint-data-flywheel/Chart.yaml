@@ -1,0 +1,11 @@
+apiVersion: v2
+appVersion: 0.3.1
+dependencies:
+- condition: nemo-microservices-helm-chart.enabled
+  name: nemo-microservices-helm-chart
+  repository: https://helm.ngc.nvidia.com/nvidia/nemo-microservices
+  version: 25.8.0
+description: A Helm chart for Data Flywheel Blueprint
+name: nvidia-blueprint-data-flywheel
+type: application
+version: 0.3.1-nvaie.1
