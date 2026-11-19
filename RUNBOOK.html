@@ -364,9 +364,9 @@ No webhooks. 2 pods in <code>nvaie-test</code>.</td>
 <td></td>
 <td></td>
 <td></td>
-<td><em>Safety:</em> webhooks patched to act <strong>only on
-<code>nvaie-test</code></strong> (upstream: every other namespace,
-fail-closed). Removed by <code>helm uninstall</code>.</td>
+<td><em>Safety:</em> admission webhooks switched off (none created), so
+Volcano can never block pod creation anywhere; no system-critical
+priority. Removed by <code>helm uninstall volcano</code>.</td>
 <td></td>
 <td></td>
 </tr>
