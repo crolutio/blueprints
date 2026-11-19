@@ -196,12 +196,13 @@ EOF
 else info "skipped (StorageClass missing, see above)"; fi
 
 # ---------------------------------------------------------------- image pulls
-section "Image pull check (takes up to 5 minutes)"
+section "Image pull check (takes up to 10 minutes)"
 pc=$(bash "$D/scripts/pull-check.sh" all "$NS" 2>&1)
 while read -r res img; do
   case "$res" in
     OK) pass "pull $img";;
-    FAILED|TIMEOUT) fail "pull $img ($res)" "registry for $img is blocked: mirror the image or allow the registry (approval A6)";;
+    FAILED)  fail "pull $img (FAILED)" "$img is refused (see reason): mirror the image or ask the network team to allow it (approval A6)";;
+    TIMEOUT) fail "pull $img (not finished after 10 minutes)" "slow or interrupted download (see reason): re-run, or mirror the image";;
   esac
 done < <(grep -E '^(OK|FAILED|TIMEOUT) ' <<<"$pc")
 grep -A2 -E '^(FAILED|TIMEOUT) ' <<<"$pc" | grep -E '^ {5,}' | sed 's/^ */        reason: /' 

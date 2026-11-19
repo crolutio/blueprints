@@ -53,22 +53,29 @@ spec:
       capabilities: {drop: ["ALL"]}
 EOF
 done
-echo "Waiting up to 5 minutes for pulls..."
-for _ in $(seq 1 30); do
+# A first "Failed"/"BackOff" is often temporary (slow or large download, kubelet pull rate limit):
+# the kubelet retries by itself. So keep waiting until the image is Pulled, or the error is a
+# permanent one (auth / not found / blocked), or 10 minutes pass.
+HARD='unauthorized|denied|forbidden|not found|manifest unknown|no such host|blocked'
+ev() { oc -n "$NS" get events --field-selector involvedObject.name="$1" -o jsonpath='{range .items[*]}{.reason}: {.message}{"\n"}{end}' 2>/dev/null; }
+echo "Waiting up to 10 minutes for pulls (large images such as Elasticsearch take a few minutes)..."
+for _ in $(seq 1 ${PULL_ROUNDS:-60}); do
   pending=0
   for n in $(seq 1 $i); do
-    r=$(oc -n "$NS" get events --field-selector involvedObject.name=pull-check-$n -o jsonpath='{range .items[*]}{.reason} {end}' 2>/dev/null)
-    [[ "$r" == *Pulled* || "$r" == *Failed* || "$r" == *BackOff* || "$r" == *ErrImagePull* ]] || pending=1
+    e=$(ev pull-check-$n)
+    grep -q '^Pulled:' <<<"$e" || grep -qiE "$HARD" <<<"$e" || pending=1
   done
   [ $pending = 0 ] && break; sleep 10
 done
 echo; printf "%-8s %s\n" RESULT IMAGE
 for n in $(seq 1 $i); do
   img=$(oc -n "$NS" get pod pull-check-$n -o jsonpath='{.metadata.annotations.image}')
-  r=$(oc -n "$NS" get events --field-selector involvedObject.name=pull-check-$n -o jsonpath='{range .items[*]}{.reason} {end}')
-  if [[ "$r" == *Pulled* ]]; then res=OK; elif [[ "$r" == *Failed* || "$r" == *ErrImagePull* || "$r" == *BackOff* ]]; then res=FAILED; else res=TIMEOUT; fi
+  e=$(ev pull-check-$n)
+  if grep -q '^Pulled:' <<<"$e"; then res=OK
+  elif grep -qiE "$HARD" <<<"$e"; then res=FAILED
+  else res=TIMEOUT; fi
   printf "%-8s %s\n" "$res" "$img"
-  [ "$res" = OK ] || oc -n "$NS" get events --field-selector involvedObject.name=pull-check-$n -o custom-columns=REASON:.reason,MESSAGE:.message --no-headers | tail -2 | sed 's/^/         /'
+  [ "$res" = OK ] || grep -E '^(Failed|BackOff|Warning|Pulling)' <<<"$e" | tail -2 | cut -c1-300 | sed 's/^/         /'
 done
 oc -n "$NS" delete pod -l pull-check=nvaie --wait=false >/dev/null
 echo "(pull-check pods deleted; an image without /bin/sh still counts as OK if it was Pulled)"
