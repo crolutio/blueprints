@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Free-GPU check: per GPU node -> product, allocatable GPUs, GPUs requested by scheduled (non-finished)
-# pods, free GPUs; then totals per GPU type and the flywheel layout recommendation.
+# pods, free GPUs; then totals per GPU type and whether each blueprint fits.
 # Read-only (oc get only). Needs: oc, jq.
 set -euo pipefail
 
@@ -33,10 +33,6 @@ jq -r '
     "",
     ( (map(select(.product == "NVIDIA-H200") | .free) | add // 0) as $h
     | (map(select(.product == "NVIDIA-L40S") | .free) | add // 0) as $l
-    | "FLYWHEEL (needs 3 GPUs: Customizer + candidate NIM + judge NIM; NIMs take any free GPU):",
-      (if ($h + $l) < 3 then "  NOT ENOUGH free GPUs (\($h + $l)). Wait until 3 are free."
-       elif $h >= 1 and ($h + $l) >= 3 then "  -> values-layout-h200.yaml (Customizer on H200). values-layout-l40s.yaml also possible if L40S free >= 1."
-       elif $l >= 1 then "  -> values-layout-l40s.yaml (Customizer on L40S)."
-       else "  -> no matching layout" end),
+    | "FLYWHEEL (needs 2 GPUs: candidate NIM + judge NIM; they take any free GPU): \(if ($h + $l) >= 2 then "OK (\($h + $l) free)" else "NOT ENOUGH free GPUs (\($h + $l)). Wait until 2 are free." end)",
       "RAG (needs 2 x L40S): \(if $l >= 2 then "OK (\($l) L40S free)" else "NOT ENOUGH L40S free (\($l))" end)" )
   ' <<<"$rows"

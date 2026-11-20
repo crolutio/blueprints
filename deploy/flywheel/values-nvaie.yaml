@@ -1,18 +1,21 @@
 # =============================================================================
 # Data Flywheel Blueprint v0.3.1 (NeMo Microservices 25.8.0) - nvaie-test overrides
-# Barebones: only what the flywheel needs to run one job with NeMo Evaluator + Customizer.
+# Barebones, EVALUATION MODE: the flywheel runs its base and in-context (ICL) evaluations of
+# the candidate model, scored by a local judge NIM. Fine-tuning (NeMo Customizer) is switched
+# off with the blueprint's own setting (customization_enabled: false), so the NeMo Operator
+# and Volcano are not installed: this release creates NO cluster-scoped objects (no CRDs,
+# no ClusterRoles, no webhooks).
 #
-# Use together with ONE layout file:
-#   -f values-nvaie-common.yaml -f values-layout-l40s.yaml   (fallback, all 3 GPUs on L40S)
-#   -f values-nvaie-common.yaml -f values-layout-h200.yaml   (Customizer on H200)
+#   helm install flywheel deploy/packages/nvidia-blueprint-data-flywheel-0.3.1-nvaie.2.tgz \
+#     -n nvaie-test -f deploy/flywheel/values-nvaie.yaml
 #
-# Chart: deploy/flywheel/chart (patched copy, see deploy/flywheel/PATCHES.md)
+# Patched chart: see deploy/PATCHES.md
 #
 # GPU budget at runtime (nothing in this chart requests a GPU directly):
 #   1 x candidate NIM  meta/llama-3.2-1b-instruct  (created by deployment-management)
 #   1 x judge NIM      meta/llama-3.1-8b-instruct  (created by deployment-management)
-#   1 x Customizer LoRA training pod               (created by NeMo Operator via Volcano)
-#   = 3 GPUs peak. The embedding NIM is NOT started (icl example_selection=uniform).
+#   = 2 GPUs peak. The embedding NIM is NOT started (icl example_selection=uniform).
+# Both NIMs are NIMService resources handled by the NIM Operator already on the cluster.
 #
 # CONFIGURABLE ITEMS (search for "CONFIG:"):
 #   namespace, StorageClass, Kueue queue label, nodeSelectors, judge NIM tag,
@@ -53,7 +56,7 @@ cpuNodeSelector: {}            # CONFIG: optional placement of CPU pods (empty =
 profile:
   production: {enabled: true}
   mlflow: {COMPOSE_PROFILES: ""}
-volcano: {enabled: false}      # unused key of this chart; Volcano is installed separately (cluster-scoped, needs approval)
+volcano: {enabled: false}      # unused key of this chart; Volcano is only needed for fine-tuning (off)
 
 # --- In-cluster NeMo API router (CPU only, replaces the upstream Ingress) --------
 nemoGateway:
@@ -145,11 +148,10 @@ foundationalFlywheelServer:
         gpus: 1
         pvc_size: 25Gi
         tag: "1.8.3"            # verified published on nvcr.io (2026-11-19)
-        customization_enabled: true
-        customizer_configs:
-          target: "meta/llama-3.2-1b-instruct@2.0"
-          gpus: 1
-          max_seq_length: 8192
+        # Fine-tuning OFF (blueprint setting): the flywheel skips the customization and
+        # customized-evaluation stages. No customizer_configs block, so the cleanup code
+        # never calls the (absent) Customizer either.
+        customization_enabled: false
 
     data_split_config:
       eval_size: 100
@@ -167,6 +169,7 @@ foundationalFlywheelServer:
       min_examples: 1
       example_selection: "uniform_distribution"
 
+    # training_config / lora_config are only read when customization_enabled is true (unused here).
     training_config:
       training_type: "sft"
       finetuning_type: "lora"
@@ -197,22 +200,17 @@ nemo-microservices-helm-chart:
   ingress: {enabled: false}
   virtualService: {enabled: false}
   dgxc-admission-controller: {enabled: false}
-  volcano: {enabled: false}                    # installed separately, cluster-scoped (approval)
+  volcano: {enabled: false}                    # only used for fine-tuning (off)
 
   # Bundled NIM Operator v2.0.2: not used. One NIM Operator (already on the cluster, or the
   # v3.0.2 installed in RUNBOOK 0.4) serves both blueprints.
   nim-operator:
     enabled: false
 
-  # ---- NeMo Operator: watch only this namespace (Role instead of ClusterRole) ----
-  nemo-operator:
-    restrictedNamespace: nvaie-test            # CONFIG: namespace
-    controllerManager:
-      kubeRbacProxy:
-        enabled: false                         # PATCH key: metrics-only sidecar; its image gcr.io/kubebuilder/kube-rbac-proxy:v0.15.0 is gone (404)
-    imagePullSecrets:
-      - name: ngc-registry-default
-    metricsService: {enabled: false}
+  # ---- Fine-tuning stack: OFF. The NeMo Operator (5 cluster-wide CRDs) and Customizer are
+  # only used for LoRA training. Deployment-management starts NIMs through the NIM Operator.
+  nemo-operator: {enabled: false}
+  customizer: {enabled: false}
 
   # ---- Deployment management: creates the candidate + judge NIMs as NIMService CRs ----
   deployment-management:
@@ -293,6 +291,9 @@ nemo-microservices-helm-chart:
         limits:   {cpu: 200m, memory: 256Mi}
     dbMigration:
       securityContext: {}                      # PATCH key: upstream forces runAsUser 0 (root)
+      resources:                               # upstream sets limits only
+        requests: {cpu: 100m, memory: 256Mi}
+        limits:   {cpu: "1",  memory: 1Gi}
     evalJobResources:                          # PATCH key: runtime eval Job (upstream: none)
       requests: {cpu: 500m, memory: 1Gi}
       limits:   {cpu: "2",  memory: 4Gi}
@@ -316,41 +317,3 @@ nemo-microservices-helm-chart:
         persistence: {size: 2Gi, storageClass: ocs-storagecluster-ceph-rbd}   # CONFIG
       global: {storageClass: ocs-storagecluster-ceph-rbd, size: 2Gi}   # CONFIG
 
-  customizer:
-    enabled: true
-    apiResources:                              # PATCH key (upstream sets no resources)
-      requests: {cpu: 250m, memory: 512Mi}
-      limits:   {cpu: "2",  memory: 2Gi}
-    modelDownloader:
-      restrictedV2: true                       # PATCH key: drop upstream fixed UID/GID/fsGroup 1000 (rejected by restricted-v2)
-    modelsStorage:
-      storageClassName: ocs-storagecluster-ceph-rbd   # CONFIG
-      size: 30Gi                               # only the 1B checkpoint is downloaded
-      accessModes: [ReadWriteOnce]
-    customizationTargets:
-      overrideExistingTargets: true
-      targets:                                 # only the 1B candidate (upstream also enables 3B and 8B downloads)
-        meta/llama-3.2-1b-instruct@2.0: {enabled: true}
-        meta/llama-3.2-3b-instruct@2.0: {enabled: false}
-        meta/llama-3.1-8b-instruct@2.0: {enabled: false}
-    customizerConfig:
-      training:
-        queue: "default"                       # Volcano queue (Volcano's own "default" Queue, not Kueue)
-        pvc:
-          storageClass: ocs-storagecluster-ceph-rbd   # CONFIG
-          volumeAccessMode: "ReadWriteOnce"
-          size: 10Gi
-      openTelemetry: {enabled: false}
-      tolerations: []
-      nodeSelectors: {}                        # set by the layout file
-    opentelemetry-collector: {enabled: false}
-    postgresql:
-      image: {repository: bitnamilegacy/postgresql}
-      primary:
-        podSecurityContext: {enabled: false}
-        containerSecurityContext: {enabled: false}
-        resources:
-          requests: {cpu: 100m, memory: 256Mi}
-          limits:   {cpu: "1",  memory: 1Gi}
-        persistence: {size: 2Gi, storageClass: ocs-storagecluster-ceph-rbd}   # CONFIG
-      global: {storageClass: ocs-storagecluster-ceph-rbd}   # CONFIG

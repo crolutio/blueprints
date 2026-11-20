@@ -1,12 +1,12 @@
 diff -ruN '--exclude=charts' data-flywheel/deploy/helm/data-flywheel/Chart.yaml deploy/flywheel/chart/Chart.yaml
 --- data-flywheel/deploy/helm/data-flywheel/Chart.yaml	2026-11-19 15:18:45.704819297 +0400
-+++ deploy/flywheel/chart/Chart.yaml	2026-11-19 15:32:22.991767961 +0400
++++ deploy/flywheel/chart/Chart.yaml	2026-11-20 11:25:40.173691162 +0400
 @@ -7,5 +7,5 @@
    repository: https://helm.ngc.nvidia.com/nvidia/nemo-microservices
    version: '25.8.0'
  type: application
 -version: "0.3.1"
-+version: "0.3.1-nvaie.1"
++version: "0.3.1-nvaie.2"
  appVersion: "0.3.1"
 diff -ruN '--exclude=charts' data-flywheel/deploy/helm/data-flywheel/templates/api-deployment.yaml deploy/flywheel/chart/templates/api-deployment.yaml
 --- data-flywheel/deploy/helm/data-flywheel/templates/api-deployment.yaml	2026-11-19 15:18:45.704965330 +0400
@@ -342,8 +342,8 @@ diff -ruN '--exclude=charts' data-flywheel/deploy/helm/data-flywheel/templates/m
  {{- end }}
 diff -ruN '--exclude=charts' data-flywheel/deploy/helm/data-flywheel/templates/nemo-gateway.yaml deploy/flywheel/chart/templates/nemo-gateway.yaml
 --- data-flywheel/deploy/helm/data-flywheel/templates/nemo-gateway.yaml	1970-01-01 04:00:00.000000000 +0400
-+++ deploy/flywheel/chart/templates/nemo-gateway.yaml	2026-11-19 15:32:22.964895287 +0400
-@@ -0,0 +1,109 @@
++++ deploy/flywheel/chart/templates/nemo-gateway.yaml	2026-11-20 11:25:40.169824786 +0400
+@@ -0,0 +1,114 @@
 +{{- /*
 +PATCH(nvaie): NEW FILE. In-cluster path router for the NeMo APIs.
 +The flywheel server sends every NeMo call (customizer, evaluator, deployment-management,
@@ -384,7 +384,12 @@ diff -ruN '--exclude=charts' data-flywheel/deploy/helm/data-flywheel/templates/n
 +        location /v1/datasets        { proxy_pass http://nemo-entity-store:8000; }
 +        location /v1/repos           { proxy_pass http://nemo-entity-store:8000; }
 +        location /v1/models          { proxy_pass http://nemo-entity-store:8000; }
++        {{- /* No route when Customizer is disabled: nginx refuses to start if an upstream host does not resolve */}}
++        {{- $nmp := index .Values "nemo-microservices-helm-chart" | default dict }}
++        {{- $cust := $nmp.customizer | default dict }}
++        {{- if ne (toString $cust.enabled) "false" }}
 +        location /v1/customization   { proxy_pass http://nemo-customizer:8000; }
++        {{- end }}
 +        location /v1/evaluation      { proxy_pass http://nemo-evaluator:7331; }
 +        location /v1/deployment      { proxy_pass http://nemo-deployment-management:8000; }
 +      }

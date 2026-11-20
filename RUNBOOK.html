@@ -225,11 +225,13 @@ prerequisite operators</a></li>
 id="toc-05-free-gpu-check-run-again-right-before-each-install"><span class="num">0.5</span>
 Free-GPU check (run again right before each install)</a></li>
 </ul></li>
-<li><a href="#1-data-flywheel-max-3-gpus"
-id="toc-1-data-flywheel-max-3-gpus"><span class="num">1.</span> Data Flywheel (max 3 GPUs)</a>
+<li><a href="#1-data-flywheel-evaluation-mode-2-gpus"
+id="toc-1-data-flywheel-evaluation-mode-2-gpus"><span class="num">1.</span> Data Flywheel
+(evaluation mode, 2 GPUs)</a>
 <ul>
-<li><a href="#11-choose-the-values-files"
-id="toc-11-choose-the-values-files"><span class="num">1.1</span> Choose the values files</a></li>
+<li><a href="#11-set-the-package-and-values-file"
+id="toc-11-set-the-package-and-values-file"><span class="num">1.1</span> Set the package and
+values file</a></li>
 <li><a href="#12-install" id="toc-12-install"><span class="num">1.2</span> Install</a></li>
 <li><a href="#13-check-that-the-pods-run-and-where-the-judge-nim-lands"
 id="toc-13-check-that-the-pods-run-and-where-the-judge-nim-lands"><span class="num">1.3</span>
@@ -237,14 +239,12 @@ Check that the pods run, and where the judge NIM lands</a></li>
 <li><a href="#14-load-the-sample-data-and-start-one-flywheel-job"
 id="toc-14-load-the-sample-data-and-start-one-flywheel-job"><span class="num">1.4</span> Load the
 sample data and start one flywheel job</a></li>
-<li><a href="#15-monitor-typically-1-2-hours"
-id="toc-15-monitor-typically-1-2-hours"><span class="num">1.5</span> Monitor (typically 1-2
-hours)</a></li>
-<li><a
-href="#16-success-check-plan-wording-iterative-evaluation--customizer--evaluator"
-id="toc-16-success-check-plan-wording-iterative-evaluation--customizer--evaluator"><span class="num">1.6</span>
-Success check (plan wording: iterative evaluation + Customizer +
-Evaluator)</a></li>
+<li><a href="#15-monitor-typically-30-90-minutes"
+id="toc-15-monitor-typically-30-90-minutes"><span class="num">1.5</span> Monitor (typically 30-90
+minutes)</a></li>
+<li><a href="#16-success-check-evaluation-workflow--nemo-evaluator"
+id="toc-16-success-check-evaluation-workflow--nemo-evaluator"><span class="num">1.6</span>
+Success check (evaluation workflow + NeMo Evaluator)</a></li>
 <li><a href="#17-capture-evidence" id="toc-17-capture-evidence"><span class="num">1.7</span>
 Capture evidence</a></li>
 <li><a
@@ -275,9 +275,8 @@ id="toc-26-uninstall-rag-and-clean-up-destructive-after-evidence-is-saved"><span
 Uninstall RAG and clean up (<span class="flag danger">DESTRUCTIVE</span>, after evidence is
 saved)</a></li>
 </ul></li>
-<li><a href="#3-final-clean-up-only-for-what-we-installed-in-04"
-id="toc-3-final-clean-up-only-for-what-we-installed-in-04"><span class="num">3.</span> Final
-clean-up (only for what <em>we</em> installed in 0.4)</a></li>
+<li><a href="#3-final-clean-up" id="toc-3-final-clean-up"><span class="num">3.</span> Final
+clean-up</a></li>
 <li><a href="#4-troubleshooting" id="toc-4-troubleshooting"><span class="num">4.</span>
 Troubleshooting</a></li>
 <li><a href="#5-not-verified-and-approvals-needed"
@@ -298,9 +297,9 @@ id="toc-52-needs-client-approval"><span class="num">5.2</span> Needs client appr
 <h1
 id="runbook-nvidia-data-flywheel--rag-blueprint-on-openshift-nvaie-test">Runbook:
 NVIDIA Data Flywheel + RAG Blueprint on OpenShift (nvaie-test)</h1>
-<p>Goal: prove each blueprint runs and meets the plan wording, with as
-few GPUs and as little production impact as possible. Run <strong>Data
-Flywheel first</strong> (max 3 GPUs), <strong>uninstall it
+<p>Goal: prove each blueprint runs on the client's GPUs, with as few
+GPUs and as little production impact as possible. Run <strong>Data
+Flywheel first</strong> (2 GPUs), <strong>uninstall it
 completely</strong>, then <strong>RAG</strong> (2 x L40S).</p>
 <div class="table-wrap"><table>
 <thead>
@@ -315,10 +314,12 @@ completely</strong>, then <strong>RAG</strong> (2 x L40S).</p>
 <tr class="odd">
 <td>Data Flywheel</td>
 <td>v0.3.1 (last release; deprecated) + NeMo Microservices 25.8.0</td>
-<td>Deploy and validate the NVIDIA Data Flywheel Blueprint, including
-the iterative evaluation and improvement workflow, and the validation of
-NeMo Customizer and Evaluator.</td>
-<td>3 at peak (Customizer + candidate NIM + judge NIM)</td>
+<td>Deploy and validate the NVIDIA Data Flywheel Blueprint in
+<strong>evaluation mode</strong>: one flywheel job runs the base and
+in-context (ICL) evaluations of a candidate model in NeMo Evaluator,
+scored by a local LLM judge. Fine-tuning (NeMo Customizer) is switched
+off with the blueprint's own setting.</td>
+<td>2 (candidate NIM + judge NIM)</td>
 </tr>
 <tr class="even">
 <td>RAG Blueprint</td>
@@ -330,13 +331,16 @@ including end-to-end functional validation.</td>
 </tbody>
 </table></div>
 <blockquote>
-<p>Barebones install: nothing optional is deployed.</p>
+<p>Barebones install: nothing optional is deployed. <strong>No operator
+is installed and nothing cluster-wide is created</strong> (no CRDs,
+ClusterRoles or webhooks): both releases contain only objects inside
+<code>nvaie-test</code>. The only operator used is the NVIDIA NIM
+Operator the client already runs.</p>
 </blockquote>
 <h2 id="client-approvals-required-before-the-day">Client approvals
 required (before the day)</h2>
-<p>Everything else stays inside <code>nvaie-test</code>. These items
-affect the whole cluster or grant extra permissions, so each needs
-explicit client approval. Exact object lists:
+<p>Everything stays inside <code>nvaie-test</code>. These items still
+need explicit client approval. Exact object lists:
 <code>deploy/reports/*.txt</code>.</p>
 <div class="table-wrap"><table>
 <thead>
@@ -351,96 +355,50 @@ explicit client approval. Exact object lists:
 </thead>
 <tbody>
 <tr class="odd">
-<td>A1</td>
-<td><strong>Volcano v1.15.4</strong> batch scheduler</td>
-<td>Flywheel</td>
-<td>11 CRDs (<code>*.volcano.sh</code>), 4 ClusterRoles + 2
-ClusterRoleBindings, runtime Queues <code>default</code>/<code>root</code>.
-No webhooks. 2 pods in <code>nvaie-test</code>.</td>
-<td>NeMo Customizer 25.8 runs every fine-tuning job through Volcano</td>
-<td>Customizer cannot run, so the flywheel plan wording is not met</td>
-</tr>
-<tr class="even">
-<td></td>
-<td></td>
-<td></td>
-<td><em>Safety:</em> admission webhooks switched off (none created), so
-Volcano can never block pod creation anywhere; no system-critical
-priority. Removed by <code>helm uninstall volcano</code>.</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>A2</td>
-<td><strong>NeMo Operator CRDs</strong></td>
-<td>Flywheel</td>
-<td>5 CRDs (<code>*.nvidia.com</code>), 4 aggregate ClusterRoles.
-Controller permissions scoped to <code>nvaie-test</code>. CRDs are
-deleted by hand afterwards (1.8).</td>
-<td>Runs Customizer training jobs</td>
-<td>Flywheel cannot be installed</td>
-</tr>
-<tr class="even">
-<td>A3</td>
-<td><strong>NVIDIA NIM Operator 3.0.2</strong> (only if the cluster has
-none)</td>
-<td>Both</td>
-<td>9 CRDs (<code>*.apps.nvidia.com</code>), 3 ClusterRoles, 2
-ClusterRoleBindings; operator pod in <code>nvaie-test</code></td>
-<td>Both blueprints create their NIMs through it</td>
-<td>Neither blueprint can start its models</td>
-</tr>
-<tr class="odd">
-<td>A4</td>
-<td><strong>Elastic ECK operator 3.3.2</strong> (only if the cluster has
-none)</td>
-<td>RAG</td>
-<td>12 CRDs, ClusterRoles; operator in <code>nvaie-test</code>, managing
-only <code>nvaie-test</code>, webhook disabled</td>
-<td>RAG's vector database (Elasticsearch)</td>
-<td>RAG cannot be installed as designed</td>
-</tr>
-<tr class="even">
 <td>A5</td>
-<td><strong><code>anyuid</code> SCC RoleBinding</strong>
-(namespaced)</td>
+<td><strong><code>anyuid</code> SCC for one ServiceAccount</strong>
+(namespaced RoleBinding)</td>
 <td>RAG</td>
-<td>Lets ServiceAccounts <code>default</code>, <code>rag-server</code>,
-<code>rag-nv-ingest</code>, <code>rag-redis-master</code>,
-<code>nim-cache-sa</code> run as their image's user (NVIDIA's OpenShift
-design)</td>
-<td><code>rag-nv-ingest</code> needs a fixed group (1000)</td>
-<td>RAG ingestion likely fails</td>
+<td>Lets <strong>only</strong> <code>rag-nv-ingest</code> run as its
+image's user (root). NVIDIA's chart grants it to 7 ServiceAccounts,
+including <code>default</code>; we cut that to this one. Every other pod
+runs under <code>restricted-v2</code>.</td>
+<td>nv-ingest's Python interpreter lives under <code>/root</code> (mode
+700), so it cannot start as any other user</td>
+<td>RAG ingestion cannot run</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>A6</td>
 <td><strong>Image registries</strong> besides nvcr.io</td>
 <td>Both</td>
-<td>docker.io (mongo, redis, Bitnami Postgres, Volcano, seaweedfs,
-Elasticsearch, ECK operator), registry.redhat.io (nginx proxy)</td>
+<td>docker.io (mongo, redis, Bitnami Postgres, seaweedfs,
+Elasticsearch), registry.redhat.io (nginx proxy)</td>
 <td>Components of the blueprints</td>
 <td>Mirror the images, or the affected component cannot start</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>A7</td>
 <td><strong>Possible SCC exceptions at runtime</strong></td>
 <td>Flywheel</td>
-<td>Decided case by case if a pod created by NeMo (training, NIM,
-evaluation) is rejected for asking for a fixed user</td>
+<td>Decided case by case if a pod created at runtime (NIM, evaluation
+Job) is rejected for asking for a fixed user</td>
 <td>Cannot be checked before the run</td>
 <td>That step fails</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>A8</td>
 <td><strong>GPU use</strong></td>
 <td>Both</td>
-<td>Flywheel: up to 3 GPUs (any free type), then RAG: 2 x L40S, one
-after the other</td>
-<td>Run the models and fine-tuning</td>
+<td>Flywheel: 2 GPUs (any free type), then RAG: 2 x L40S, one after the
+other</td>
+<td>Run the models</td>
 <td>—</td>
 </tr>
 </tbody>
 </table></div>
+<p>Not needed any more: A1 (Volcano), A2 (NeMo Operator CRDs) and A4
+(ECK operator). A3 (installing a NIM Operator) is not needed either: the
+client already runs NIM Operator 3.1.2.</p>
 <p>Also to confirm with the client: whether <code>nvaie-test</code> is
 Kueue-managed (0.3.4) and the quota/LimitRange (0.3.1).</p>
 <p><strong>Conventions</strong></p>
@@ -457,10 +415,9 @@ list first; delete only what the list shows.</li>
 <p><strong>Folder map</strong></p>
 <pre><code>RUNBOOK.html                    this file
 deploy/packages/                our two patched charts (installed from these files) + SHA256SUMS
-deploy/flywheel/                values-nvaie-common.yaml, values-layout-{l40s,h200}.yaml, data/
-deploy/volcano/                 values-volcano.yaml (Volcano 1.15.4, installed in 1.2)
+deploy/flywheel/                values-nvaie.yaml, data/
 deploy/rag/                     values-nvaie.yaml, sample/nvaie-validation-note.txt
-deploy/scripts/                 preflight.sh, gpu-free.sh, pull-check.sh, volcano-postrender.sh,
+deploy/scripts/                 preflight.sh, gpu-free.sh, pull-check.sh,
                                 flywheel-check.sh, rag-test.sh, evidence.sh
 deploy/reports/                 offline renders + analysis (GPU, images, PVCs, cluster-scoped, SCC)
 deploy/PATCHES.md               every change made to the upstream charts, and why (+ the *.diff files)</code></pre>
@@ -497,9 +454,10 @@ deploy/PATCHES.md               every change made to the upstream charts, and wh
 </table></div>
 <p>The pre-flight script (0.3) checks all of these.</p>
 <h3 id="02-log-in-and-set-variables"><span class="num">0.2</span> Log in and set variables</h3>
-<p>The account must be able to create cluster-scoped objects for the
-flywheel install (CRDs, ClusterRoles, webhooks). This normally means a
-cluster-admin, or a client admin running those steps.</p>
+<p>The account needs admin rights in <code>nvaie-test</code> only
+(nothing cluster-wide is created). For the RAG install it must also be
+allowed to grant the <code>anyuid</code> SCC (approval A5); the
+pre-flight checks both.</p>
 <div class="sourceCode" id="cb2"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> login <span class="at">--server</span><span class="op">=</span>https://api.<span class="op">&lt;</span>cluster-domain<span class="op">&gt;</span>:6443      <span class="co"># as provided by the client</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">NS</span><span class="op">=</span>nvaie-test</span>
@@ -507,7 +465,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="bu">read</span> <span class="at">-rsp</span> <span class="st">&quot;NGC API key: &quot;</span> <span class="va">NGC_API_KEY</span><span class="kw">;</span> <span class="bu">echo</span><span class="kw">;</span> <span class="bu">export</span> <span class="va">NGC_API_KEY</span>   <span class="co"># never echo it, never put it in files</span></span></code></pre></div>
 <h3 id="03-run-the-pre-flight-script"><span class="num">0.3</span> Run the pre-flight script</h3>
 <p>One command runs every check (tools, permissions, quotas,
-StorageClass, operators, Kueue, a storage write test, an image pull
+StorageClass, NIM Operator, Kueue, a storage write test, an image pull
 test, free GPUs). It also creates the two secrets the installs need if
 they are missing. It takes about 5-10 minutes.</p>
 <div class="sourceCode" id="cb3"><pre
@@ -528,7 +486,8 @@ while the result is <code>NOT READY</code>. Keep the
 <code>preflight-*.txt</code> file as evidence.</p>
 <p>What the warnings and failures mean:</p>
 <p><strong>0.3.1 Quotas and limits.</strong> If <code>nvaie-test</code>
-has a ResourceQuota, it must cover, at the same time:</p>
+has a ResourceQuota, it must cover each blueprint (they run one after
+the other):</p>
 <div class="table-wrap"><table>
 <thead>
 <tr class="header">
@@ -540,21 +499,21 @@ has a ResourceQuota, it must cover, at the same time:</p>
 </thead>
 <tbody>
 <tr class="odd">
-<td>Flywheel, chart pods (incl. Volcano)</td>
-<td>~5.1 CPU / 14 GiB</td>
-<td>~29 CPU / 42 GiB</td>
+<td>Flywheel, chart pods</td>
+<td>~4 CPU / 12 GiB</td>
+<td>~22 CPU / 34 GiB</td>
 <td>0</td>
 </tr>
 <tr class="even">
-<td>Flywheel, runtime pods (2 NIMs, training, eval Jobs)</td>
+<td>Flywheel, runtime pods (2 NIMs, eval Jobs)</td>
 <td>set by NeMo, unknown</td>
 <td>set by NeMo, unknown</td>
-<td>3</td>
+<td>2</td>
 </tr>
 <tr class="odd">
 <td>RAG (incl. both NIMs)</td>
-<td>~6.7 CPU / 47 GiB</td>
-<td>~32 CPU / 100 GiB</td>
+<td>~6.7 CPU / 54 GiB</td>
+<td>~32 CPU / 108 GiB</td>
 <td>2</td>
 </tr>
 </tbody>
@@ -569,36 +528,37 @@ to add one.</p>
 <code>sed</code> command that puts the right name into the values files.
 Run it, then run the script again. If the namespace is not
 <code>nvaie-test</code>, also run
-<code>sed -i "s/nvaie-test/$NS/g" deploy/flywheel/values-*.yaml</code>
+<code>sed -i "s/nvaie-test/$NS/g" deploy/flywheel/values-nvaie.yaml</code>
 (it is used for RBAC scoping).</p>
-<p><strong>0.3.3 Operators.</strong> Tells you which operators to
-install in 0.4. Two results are a hard <strong class="flag stop">STOP</strong> (contact
-us): Volcano already installed by someone else, or NeMo already
-installed by someone else.</p>
+<p><strong>0.3.3 Operators.</strong> Only the NIM Operator matters (both
+blueprints start their models through it). It must be version 3.0.2 or
+newer; the client runs 3.1.2.</p>
 <p><strong>0.3.4 Kueue.</strong> If the namespace is Kueue-managed:</p>
 <ul>
 <li>set <code>kueue.queueName: &lt;localqueue-name&gt;</code> in
-<code>deploy/flywheel/values-nvaie-common.yaml</code> and
+<code>deploy/flywheel/values-nvaie.yaml</code> and
 <code>deploy/rag/values-nvaie.yaml</code>;</li>
 <li><strong>ask the client</strong> whether unlabelled pods are held
-back. Pods created at runtime (flywheel NIMs, Customizer training,
-evaluation Jobs, NIM cache Jobs, Volcano pods) <strong>cannot</strong>
-carry the label. If they are held, the client must exempt
-<code>nvaie-test</code> for the test.</li>
+back. Pods created at runtime (flywheel NIMs, evaluation Jobs, NIM cache
+Jobs) <strong>cannot</strong> carry the label. If they are held, the
+client must exempt <code>nvaie-test</code> for the test.</li>
 </ul>
 <p><strong>0.3.5 PID limit.</strong> Recorded only. NVIDIA's OpenShift
 overlay already handles low limits.</p>
+<p><strong>anyuid (RAG only).</strong> A <code>WARN</code> here does not
+block the flywheel. Before the RAG install a cluster-admin must approve
+A5 (and may have to run the RAG install, 2.2).</p>
 <p><strong>Storage write test fails.</strong> The charts set no fixed
 UID/GID/fsGroup; OpenShift's restricted-v2 SCC assigns an fsGroup from
 the namespace range, and that is what makes new volumes writable. If a
 new volume is not writable by a non-root pod, send the script output to
-the storage admin.
-The test runs as a Job, so its pod gets the same SCC the real workloads
-will get. If the output names an SCC other than <code>restricted-v2</code>
-(for example an OpenShift AI SCC), the write usually fails because that SCC
-assigns no fsGroup. That is a namespace/SCC problem, not a storage problem:
-<strong class="flag stop">STOP</strong> and send us the output. If the test
-Job is held by Kueue, see 0.3.4: the client must exempt the namespace.</p>
+the storage admin. The test runs as a Job, so its pod gets the same SCC
+the real workloads will get. If the output names an SCC other than
+<code>restricted-v2</code> (for example an OpenShift AI SCC), the write
+usually fails because that SCC assigns no fsGroup. That is a
+namespace/SCC problem, not a storage problem: <strong class="flag stop">STOP</strong> and
+send us the output. If the test Job is held by Kueue, see 0.3.4: the
+client must exempt the namespace.</p>
 <p><strong>Image pull fails.</strong> That registry is blocked. Check
 the cluster's ImageDigestMirrorSet
 (<code>oc get imagedigestmirrorset -o yaml</code>) with the client, or
@@ -606,9 +566,9 @@ mirror the image. <strong class="flag stop">STOP</strong> for any failed image t
 blueprint you are about to install uses.</p>
 <h3 id="04-approvals-and-prerequisite-operators"><span class="num">0.4</span> Approvals and
 prerequisite operators</h3>
-<p>Get written client approval for everything in <strong>section
-5.2</strong> before the day. Then, depending on the "Operators" part of
-the pre-flight output:</p>
+<p>Get written client approval for the items at the top of this runbook
+before the day (A5 is only needed for RAG). No operator is installed by
+us:</p>
 <div class="table-wrap"><table>
 <thead>
 <tr class="header">
@@ -618,58 +578,21 @@ the pre-flight output:</p>
 </thead>
 <tbody>
 <tr class="odd">
-<td>NIM Operator present, version &gt;= 3.0.2</td>
+<td>NIM Operator present, version &gt;= 3.0.2 (the client runs
+3.1.2)</td>
 <td>Use it for both blueprints. Nothing to install.</td>
 </tr>
 <tr class="even">
-<td><strong>A.</strong> NIM Operator absent (approved)</td>
-<td>Install v3.0.2 once, into <code>nvaie-test</code>, straight from
-NVIDIA's Helm repo (below). Used by both blueprints; removed in 3.</td>
-</tr>
-<tr class="odd">
-<td>ECK CRD present</td>
-<td>Make sure the ECK operator watches <code>nvaie-test</code> (checked
-in 2.3).</td>
-</tr>
-<tr class="even">
-<td>ECK absent (approved)</td>
-<td>Install ECK 3.3.2 into <code>nvaie-test</code>, scoped to it,
-straight from Elastic's Helm repo (below).</td>
-</tr>
-<tr class="odd">
-<td>Volcano CRD present (someone else's Volcano)</td>
-<td><strong class="flag stop">STOP and ask</strong>; do not install a second Volcano.</td>
-</tr>
-<tr class="even">
-<td>Volcano absent</td>
-<td>Approved: install Volcano 1.15.4 in 1.2. Not approved:
-Customizer cannot run (plan wording not met).</td>
+<td><strong>A.</strong> NIM Operator absent</td>
+<td><strong class="flag stop">STOP and ask</strong>: installing one adds CRDs and needs
+separate approval.</td>
 </tr>
 </tbody>
 </table></div>
-<p>Install NIM Operator 3.0.2 (case A, approved only):</p>
-<div class="sourceCode" id="cb4"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">helm</span> install nim-operator https://helm.ngc.nvidia.com/nvidia/charts/k8s-nim-operator-3.0.2.tgz <span class="dt">\</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--username</span> <span class="st">&#39;$oauthtoken&#39;</span> <span class="at">--password</span> <span class="st">&quot;</span><span class="va">$NGC_API_KEY</span><span class="st">&quot;</span> <span class="at">-n</span> <span class="va">$NS</span> <span class="at">--wait</span> <span class="at">--timeout</span> 10m</span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pods <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-l</span> app.kubernetes.io/name=k8s-nim-operator</span></code></pre></div>
-<p>Expected: one <code>nim-operator-k8s-nim-operator-...</code> pod
-<code>1/1 Running</code>. Creates 9 CRDs
-(<code>*.apps.nvidia.com</code>), 3 ClusterRoles and 2
-ClusterRoleBindings.</p>
-<p>Install ECK 3.3.2 (approved only), managing only this namespace and
-without its validating webhook. <code>docker.elastic.co</code> is blocked
-on this cluster, so the operator image comes from Docker Hub (same
-release):</p>
-<div class="sourceCode" id="cb5"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">helm</span> install elastic-operator eck-operator <span class="at">--repo</span> https://helm.elastic.co <span class="at">--version</span> 3.3.2 <span class="at">-n</span> <span class="va">$NS</span> <span class="dt">\</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--set</span> managedNamespaces=<span class="st">&quot;{</span><span class="va">$NS</span><span class="st">}&quot;</span> <span class="at">--set</span> webhook.enabled=false <span class="dt">\</span></span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--set</span> image.repository=docker.io/elastic/eck-operator <span class="at">--wait</span> <span class="at">--timeout</span> 10m</span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pods <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-l</span> control-plane=elastic-operator</span></code></pre></div>
-<p>Expected: <code>elastic-operator-0  1/1 Running</code>.</p>
 <h3 id="05-free-gpu-check-run-again-right-before-each-install"><span class="num">0.5</span>
 Free-GPU check (run again right before each install)</h3>
-<div class="sourceCode" id="cb6"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">bash</span> deploy/scripts/gpu-free.sh</span></code></pre></div>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">bash</span> deploy/scripts/gpu-free.sh</span></code></pre></div>
 <p>Expected (example):</p>
 <pre><code>NODE        PRODUCT      ALLOCATABLE  USED  FREE  SCHEDULABLE
 gpu-l40s-1  NVIDIA-L40S  4            3     1     true
@@ -680,62 +603,35 @@ FREE BY GPU TYPE
   NVIDIA-H200: 0 free on 0 node(s)
   NVIDIA-L40S: 3 free on 2 node(s)
 
-FLYWHEEL (needs 3 GPUs: Customizer + candidate NIM + judge NIM; NIMs take any free GPU):
-  -&gt; values-layout-l40s.yaml (Customizer on L40S).
+FLYWHEEL (needs 2 GPUs: candidate NIM + judge NIM; they take any free GPU): OK (3 free)
 RAG (needs 2 x L40S): OK (3 L40S free)</code></pre>
-<p>How to choose the flywheel layout:</p>
-<ul>
-<li><strong>&gt;= 1 H200 free and &gt;= 3 free in total</strong>:
-<code>values-layout-h200.yaml</code> (Customizer on H200).</li>
-<li><strong>else &gt;= 1 L40S free and &gt;= 3 free in total</strong>:
-<code>values-layout-l40s.yaml</code> (all on L40S, the expected
-case).</li>
-<li><strong>&lt; 3 free</strong>: wait until 3 are free.</li>
-<li>The two NIMs (candidate and judge) are created by NeMo at runtime
-<strong>without</strong> a nodeSelector. They take whatever GPU is free
-(any type). Only the Customizer training pod is pinned by the layout
-file.</li>
-</ul>
+<p>The two flywheel NIMs (candidate and judge) are created by NeMo at
+runtime <strong>without</strong> a nodeSelector. They take whatever GPU
+is free (any type).</p>
 <hr />
-<h2 id="1-data-flywheel-max-3-gpus"><span class="num">1.</span> Data Flywheel (max 3 GPUs)</h2>
-<h3 id="11-choose-the-values-files"><span class="num">1.1</span> Choose the values files</h3>
-<div class="sourceCode" id="cb8"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">FW_PKG</span><span class="op">=</span>deploy/packages/nvidia-blueprint-data-flywheel-0.3.1-nvaie.1.tgz</span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">LAYOUT</span><span class="op">=</span>deploy/flywheel/values-layout-l40s.yaml     <span class="co"># or values-layout-h200.yaml (see 0.5)</span></span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="va">FW_VALUES</span><span class="op">=</span><span class="va">(</span>-f deploy/flywheel/values-nvaie-common.yaml -f <span class="va">$LAYOUT</span><span class="va">)</span></span></code></pre></div>
+<h2 id="1-data-flywheel-evaluation-mode-2-gpus"><span class="num">1.</span> Data Flywheel
+(evaluation mode, 2 GPUs)</h2>
+<h3 id="11-set-the-package-and-values-file"><span class="num">1.1</span> Set the package and
+values file</h3>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">FW_PKG</span><span class="op">=</span>deploy/packages/nvidia-blueprint-data-flywheel-0.3.1-nvaie.2.tgz</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="va">FW_VALUES</span><span class="op">=</span><span class="va">(</span>-f deploy/flywheel/values-nvaie.yaml<span class="va">)</span></span></code></pre></div>
 <h3 id="12-install"><span class="num">1.2</span> Install</h3>
-<p>First Volcano 1.15.4 (approval A1), straight from Volcano's Helm
-repo. NeMo 25.8 bundles Volcano 1.9.0, which does not support this
-cluster's Kubernetes 1.35, so the bundled one stays off.</p>
-<div class="sourceCode" id="cb9v"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb9v-1"><a href="#cb9v-1" aria-hidden="true" tabindex="-1"></a><span class="fu">chmod</span> +x deploy/scripts/volcano-postrender.sh</span>
-<span id="cb9v-2"><a href="#cb9v-2" aria-hidden="true" tabindex="-1"></a><span class="ex">helm</span> install volcano volcano <span class="at">--repo</span> https://volcano-sh.github.io/helm-charts <span class="at">--version</span> 1.15.4 <span class="at">-n</span> <span class="va">$NS</span> <span class="dt">\</span></span>
-<span id="cb9v-3"><a href="#cb9v-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">-f</span> deploy/volcano/values-volcano.yaml <span class="at">--post-renderer</span> ./deploy/scripts/volcano-postrender.sh <span class="at">--wait</span> <span class="at">--timeout</span> 10m</span>
-<span id="cb9v-4"><a href="#cb9v-4" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pods <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-l</span> <span class="st">&#39;app in (volcano-scheduler,volcano-controller)&#39;</span></span>
-<span id="cb9v-5"><a href="#cb9v-5" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get queue</span></code></pre></div>
-<p>Expected: <code>volcano-controllers-...</code> and
-<code>volcano-scheduler-...</code> both <code>1/1 Running</code>;
-<code>oc get queue</code> lists <code>default</code> (and
-<code>root</code>) within a minute. <strong class="flag stop">STOP</strong> if either pod
-is not Running after 5 minutes (logs:
-<code>oc logs -n $NS deploy/volcano-scheduler</code>); uninstall it (1.8
-step 4) and contact us.</p>
-<p>Then the flywheel:</p>
-<div class="sourceCode" id="cb9"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">bash</span> deploy/scripts/gpu-free.sh <span class="kw">|</span> <span class="fu">tail</span> <span class="at">-4</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="ex">helm</span> upgrade <span class="at">--install</span> flywheel <span class="va">$FW_PKG</span> <span class="at">-n</span> <span class="va">$NS</span> <span class="st">&quot;</span><span class="va">${FW_VALUES</span><span class="op">[@]</span><span class="va">}</span><span class="st">&quot;</span> <span class="at">--wait</span> <span class="at">--timeout</span> 25m</span></code></pre></div>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">bash</span> deploy/scripts/gpu-free.sh <span class="kw">|</span> <span class="fu">tail</span> <span class="at">-2</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="ex">helm</span> upgrade <span class="at">--install</span> flywheel <span class="va">$FW_PKG</span> <span class="at">-n</span> <span class="va">$NS</span> <span class="st">&quot;</span><span class="va">${FW_VALUES</span><span class="op">[@]</span><span class="va">}</span><span class="st">&quot;</span> <span class="at">--wait</span> <span class="at">--timeout</span> 25m</span></code></pre></div>
 <p>Expected (after 5-15 minutes):</p>
 <pre><code>Release &quot;flywheel&quot; does not exist. Installing it now.
 NAME: flywheel
 NAMESPACE: nvaie-test
 STATUS: deployed
 REVISION: 1</code></pre>
-<p>If it times out, do not re-run blindly. Go to 5 (Troubleshooting) and
+<p>If it times out, do not re-run blindly. Go to 4 (Troubleshooting) and
 <code>oc get pods -n $NS</code>.</p>
 <h3 id="13-check-that-the-pods-run-and-where-the-judge-nim-lands"><span class="num">1.3</span>
 Check that the pods run, and where the judge NIM lands</h3>
-<div class="sourceCode" id="cb11"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pods <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-o</span> wide</span></code></pre></div>
+<div class="sourceCode" id="cb9"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pods <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-o</span> wide</span></code></pre></div>
 <p>Expected (all <code>Running</code>/<code>1/1</code> or
 <code>Completed</code>):</p>
 <pre><code>df-api-deployment-...                         1/1  Running
@@ -745,8 +641,6 @@ df-elasticsearch-deployment-...               1/1  Running
 df-mongodb-deployment-...                     1/1  Running
 df-redis-deployment-...                       1/1  Running
 nemo-gateway-...                              1/1  Running
-flywheel-customizer-...                       1/1  Running
-flywheel-customizerdb-0                       1/1  Running
 flywheel-data-store-...                       1/1  Running
 flywheel-postgresql-0                         1/1  Running
 flywheel-deployment-management-...            1/1  Running
@@ -754,15 +648,13 @@ flywheel-entity-store-...                     1/1  Running
 flywheel-entity-storedb-0                     1/1  Running
 flywheel-evaluator-...                        2/2  Running
 flywheel-evaluatordb-0                        1/1  Running
-flywheel-nemo-operator-controller-manager-... 1/1  Running
-flywheel-nim-proxy-...                        1/1  Running
-volcano-controllers-... / volcano-scheduler-...                1/1  Running   (installed first, 1.2)</code></pre>
+flywheel-nim-proxy-...                        1/1  Running</code></pre>
 <p>At startup the API asks NeMo to deploy the <strong>judge NIM</strong>
 (local judge only). Watch it (first start downloads the model, 10-20
 minutes):</p>
-<div class="sourceCode" id="cb13"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get nimcache,nimservice <span class="at">-n</span> <span class="va">$NS</span></span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pods <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-o</span> wide <span class="kw">|</span> <span class="fu">grep</span> <span class="at">-i</span> <span class="at">-E</span> <span class="st">&#39;modeldeployment|llama&#39;</span></span></code></pre></div>
+<div class="sourceCode" id="cb11"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get nimcache,nimservice <span class="at">-n</span> <span class="va">$NS</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pods <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-o</span> wide <span class="kw">|</span> <span class="fu">grep</span> <span class="at">-i</span> <span class="at">-E</span> <span class="st">&#39;modeldeployment|llama&#39;</span></span></code></pre></div>
 <p>Expected: one NIMService for <code>meta/llama-3.1-8b-instruct</code>
 becomes <code>Ready</code>; its pod is <code>1/1 Running</code>. The
 <code>-o wide</code> column <code>NODE</code> shows which GPU node it
@@ -778,31 +670,31 @@ sample data and start one flywheel job</h3>
 own <code>aiva_primary_assistant_dataset.jsonl</code> (v0.3.1), the
 example used in the blueprint docs (checksum in
 <code>deploy/flywheel/data/SHA256SUMS</code>).</p>
-<div class="sourceCode" id="cb14"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> exec <span class="at">-i</span> <span class="at">-n</span> <span class="va">$NS</span> deploy/df-api-deployment <span class="at">--</span> sh <span class="at">-c</span> <span class="st">&#39;cat &gt; /legal/source/data/aiva-1.jsonl&#39;</span> <span class="dt">\</span></span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>  <span class="op">&lt;</span> deploy/flywheel/data/aiva-1.jsonl</span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> exec <span class="at">-n</span> <span class="va">$NS</span> deploy/df-api-deployment <span class="at">--</span> <span class="dt">\</span></span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>  uv run python /legal/source/src/scripts/load_test_data.py <span class="at">--file</span> /legal/source/data/aiva-1.jsonl</span></code></pre></div>
+<div class="sourceCode" id="cb12"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> exec <span class="at">-i</span> <span class="at">-n</span> <span class="va">$NS</span> deploy/df-api-deployment <span class="at">--</span> sh <span class="at">-c</span> <span class="st">&#39;cat &gt; /legal/source/data/aiva-1.jsonl&#39;</span> <span class="dt">\</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  <span class="op">&lt;</span> deploy/flywheel/data/aiva-1.jsonl</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> exec <span class="at">-n</span> <span class="va">$NS</span> deploy/df-api-deployment <span class="at">--</span> <span class="dt">\</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>  uv run python /legal/source/src/scripts/load_test_data.py <span class="at">--file</span> /legal/source/data/aiva-1.jsonl</span></code></pre></div>
 <p>Expected: log lines ending with the records indexed into
 Elasticsearch, no traceback.</p>
 <p>Open two port-forwards in a <strong>second terminal</strong> (leave
 it running):</p>
-<div class="sourceCode" id="cb15"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> port-forward <span class="at">-n</span> nvaie-test svc/df-api-service 8000:8000 <span class="kw">&amp;</span></span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> port-forward <span class="at">-n</span> nvaie-test svc/nemo-gateway 8001:80 <span class="kw">&amp;</span></span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="bu">wait</span></span></code></pre></div>
+<div class="sourceCode" id="cb13"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> port-forward <span class="at">-n</span> nvaie-test svc/df-api-service 8000:8000 <span class="kw">&amp;</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> port-forward <span class="at">-n</span> nvaie-test svc/nemo-gateway 8001:80 <span class="kw">&amp;</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a><span class="bu">wait</span></span></code></pre></div>
 <p>Start the job (back in the first terminal):</p>
-<div class="sourceCode" id="cb16"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-sS</span> <span class="at">-X</span> POST http://localhost:8000/api/jobs <span class="at">-H</span> <span class="st">&#39;Content-Type: application/json&#39;</span> <span class="dt">\</span></span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">-d</span> <span class="st">&#39;{&quot;workload_id&quot;: &quot;primary_assistant&quot;, &quot;client_id&quot;: &quot;aiva-1&quot;}&#39;</span> <span class="kw">|</span> <span class="fu">tee</span> /tmp/fw-job.json <span class="kw">|</span> <span class="ex">jq</span> .</span>
-<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">JOB</span><span class="op">=</span><span class="va">$(</span><span class="ex">jq</span> <span class="at">-r</span> .id /tmp/fw-job.json<span class="va">)</span><span class="kw">;</span> <span class="bu">echo</span> <span class="va">$JOB</span></span></code></pre></div>
+<div class="sourceCode" id="cb14"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-sS</span> <span class="at">-X</span> POST http://localhost:8000/api/jobs <span class="at">-H</span> <span class="st">&#39;Content-Type: application/json&#39;</span> <span class="dt">\</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">-d</span> <span class="st">&#39;{&quot;workload_id&quot;: &quot;primary_assistant&quot;, &quot;client_id&quot;: &quot;aiva-1&quot;}&#39;</span> <span class="kw">|</span> <span class="fu">tee</span> /tmp/fw-job.json <span class="kw">|</span> <span class="ex">jq</span> .</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">JOB</span><span class="op">=</span><span class="va">$(</span><span class="ex">jq</span> <span class="at">-r</span> .id /tmp/fw-job.json<span class="va">)</span><span class="kw">;</span> <span class="bu">echo</span> <span class="va">$JOB</span></span></code></pre></div>
 <p>Expected:
 <code>{"id": "&lt;24-hex id&gt;", "status": "queued", "message": "NIM workflow started"}</code>
 (or similar).</p>
-<h3 id="15-monitor-typically-1-2-hours"><span class="num">1.5</span> Monitor (typically 1-2
-hours)</h3>
-<div class="sourceCode" id="cb17"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="ex">watch</span> <span class="at">-n</span> 60 <span class="st">&quot;curl -s http://localhost:8000/api/jobs/</span><span class="va">$JOB</span><span class="st"> | jq -c &#39;{status, judge: .llm_judge.deployment_status, nims: [.nims[]? | {model_name, status, deployment_status, evals: [.evaluations[]? | {eval_type, progress, scores}], cust: [.customizations[]? | {progress, customized_model}]}]}&#39;&quot;</span></span></code></pre></div>
+<h3 id="15-monitor-typically-30-90-minutes"><span class="num">1.5</span> Monitor (typically 30-90
+minutes)</h3>
+<div class="sourceCode" id="cb15"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="ex">watch</span> <span class="at">-n</span> 60 <span class="st">&quot;curl -s http://localhost:8000/api/jobs/</span><span class="va">$JOB</span><span class="st"> | jq -c &#39;{status, judge: .llm_judge.deployment_status, nims: [.nims[]? | {model_name, status, deployment_status, evals: [.evaluations[]? | {eval_type, progress, scores}]}]}&#39;&quot;</span></span></code></pre></div>
 <p>What happens, in order:</p>
 <ol type="1">
 <li>datasets are created and uploaded to NeMo Data Store;</li>
@@ -811,45 +703,35 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb17-1"><a href=
 deployed (any free GPU);</li>
 <li><code>base-eval</code> and <code>icl-eval</code> run in NeMo
 Evaluator (judge scores appear);</li>
-<li>at the same time NeMo Customizer runs LoRA training (1 GPU, pinned
-by the layout). Check it:
-<div class="sourceCode" id="cb18"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get jobs.batch.volcano.sh,podgroups.scheduling.volcano.sh <span class="at">-n</span> <span class="va">$NS</span></span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pods <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-o</span> wide <span class="kw">|</span> <span class="fu">grep</span> <span class="at">-v</span> <span class="at">-E</span> <span class="st">&#39;flywheel-|df-|nemo-gateway&#39;</span></span></code></pre></div></li>
-<li><code>customized-eval</code> runs on the LoRA adapter, then the
-candidate NIM is shut down;</li>
+<li>customization is skipped (the API logs
+<code>Customization skipped</code>), then the candidate NIM is shut
+down;</li>
 <li>job <code>status</code> becomes <code>completed</code>.</li>
 </ol>
-<p>Peak GPU use is 3 (judge + candidate + training). Check with
-<code>bash deploy/scripts/gpu-free.sh</code>. If the training pod stays
-<code>Pending</code> with <code>Insufficient nvidia.com/gpu</code> while
-the other GPU type has a free GPU, see 4 ("Training pod Pending").</p>
-<h3
-id="16-success-check-plan-wording-iterative-evaluation--customizer--evaluator"><span class="num">1.6</span>
-Success check (plan wording: iterative evaluation + Customizer +
-Evaluator)</h3>
-<div class="sourceCode" id="cb19"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="fu">bash</span> deploy/scripts/flywheel-check.sh <span class="va">$JOB</span> <span class="va">$NS</span> <span class="kw">|</span> <span class="fu">tee</span> /tmp/fw-check.txt</span></code></pre></div>
+<p>Peak GPU use is 2 (judge + candidate). Check with
+<code>bash deploy/scripts/gpu-free.sh</code>.</p>
+<h3 id="16-success-check-evaluation-workflow--nemo-evaluator"><span class="num">1.6</span>
+Success check (evaluation workflow + NeMo Evaluator)</h3>
+<div class="sourceCode" id="cb16"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="fu">bash</span> deploy/scripts/flywheel-check.sh <span class="va">$JOB</span> <span class="va">$NS</span> <span class="kw">|</span> <span class="fu">tee</span> /tmp/fw-check.txt</span></code></pre></div>
 <p>Expected, at the end:</p>
 <pre><code>PASS job status is completed
 PASS judge deployment is ready
 PASS base-eval has judge scores
 PASS icl-eval has judge scores
-PASS customized-eval has judge scores
-PASS a customization produced a customized model
-PASS NeMo Customizer reports &gt;= 1 completed job
+PASS fine-tuning skipped as configured (evaluation mode)
 PASS NeMo Evaluator reports &gt;= 1 completed job
 RESULT: ALL CHECKS PASSED</code></pre>
 <p>Success criteria: all pods running (1.3); one flywheel job completes
-with evaluation scores from the judge (base, ICL, customized); at least
-one NeMo Customizer fine-tuning job finishes.</p>
+with judge scores for the base and ICL evaluations; NeMo Evaluator
+reports completed evaluation jobs; both NIMs ran on the client's
+GPUs.</p>
 <h3 id="17-capture-evidence"><span class="num">1.7</span> Capture evidence</h3>
-<div class="sourceCode" id="cb21"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> http://localhost:8000/api/jobs/<span class="va">$JOB</span> <span class="op">&gt;</span> /tmp/fw-job-final.json</span>
-<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> http://localhost:8001/v1/customization/jobs <span class="op">&gt;</span> /tmp/fw-customization-jobs.json</span>
-<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> http://localhost:8001/v1/evaluation/jobs <span class="op">&gt;</span> /tmp/fw-evaluation-jobs.json</span>
-<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a><span class="fu">bash</span> deploy/scripts/evidence.sh flywheel flywheel <span class="va">$NS</span> /tmp/fw-job-final.json /tmp/fw-customization-jobs.json <span class="dt">\</span></span>
-<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>  /tmp/fw-evaluation-jobs.json /tmp/fw-check.txt</span></code></pre></div>
+<div class="sourceCode" id="cb18"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> http://localhost:8000/api/jobs/<span class="va">$JOB</span> <span class="op">&gt;</span> /tmp/fw-job-final.json</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> http://localhost:8001/v1/evaluation/jobs <span class="op">&gt;</span> /tmp/fw-evaluation-jobs.json</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a><span class="fu">bash</span> deploy/scripts/evidence.sh flywheel flywheel <span class="va">$NS</span> /tmp/fw-job-final.json <span class="dt">\</span></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>  /tmp/fw-evaluation-jobs.json /tmp/fw-check.txt</span></code></pre></div>
 <p>Expected:
 <code>Evidence: &lt;path&gt;/evidence-flywheel-&lt;timestamp&gt;.tar.gz</code>.
 Keep it.</p>
@@ -857,119 +739,110 @@ Keep it.</p>
 id="18-uninstall-the-flywheel-completely-destructive-after-evidence-is-saved"><span class="num">1.8</span>
 Uninstall the flywheel completely (<span class="flag danger">DESTRUCTIVE</span>, after evidence is
 saved)</h3>
-<p>Order matters: remove runtime objects <strong>while the operators
-still run</strong> (they own finalizers), then the release.</p>
+<p>Order matters: remove runtime objects <strong>while the services
+still run</strong>, then the release.</p>
 <ol type="1">
 <li>Delete the job through the API (also removes its NeMo-side
 deployments/outputs):
-<div class="sourceCode" id="cb22"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-sS</span> <span class="at">-X</span> DELETE http://localhost:8000/api/jobs/<span class="va">$JOB</span> <span class="kw">|</span> <span class="ex">jq</span> .</span></code></pre></div></li>
+<div class="sourceCode" id="cb19"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-sS</span> <span class="at">-X</span> DELETE http://localhost:8000/api/jobs/<span class="va">$JOB</span> <span class="kw">|</span> <span class="ex">jq</span> .</span></code></pre></div></li>
 <li>List NIMs created at runtime by NeMo (the judge stays up while the
 API runs). Delete only these:
-<div class="sourceCode" id="cb23"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get nimservice,nimcache <span class="at">-n</span> <span class="va">$NS</span></span>
-<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete nimservice <span class="at">-n</span> <span class="va">$NS</span> <span class="op">&lt;</span>names shown, e.g. modeldeployment-dfwbp-...<span class="op">&gt;</span></span>
-<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete nimcache   <span class="at">-n</span> <span class="va">$NS</span> <span class="op">&lt;</span>names shown<span class="op">&gt;</span></span></code></pre></div></li>
-<li>List leftover training/Volcano objects; delete only if any are
-listed:
-<div class="sourceCode" id="cb24"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get nemotrainingjobs.nvidia.com,jobs.batch.volcano.sh <span class="at">-n</span> <span class="va">$NS</span></span></code></pre></div></li>
+<div class="sourceCode" id="cb20"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get nimservice,nimcache <span class="at">-n</span> <span class="va">$NS</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete nimservice <span class="at">-n</span> <span class="va">$NS</span> <span class="op">&lt;</span>names shown, e.g. modeldeployment-dfwbp-...<span class="op">&gt;</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete nimcache   <span class="at">-n</span> <span class="va">$NS</span> <span class="op">&lt;</span>names shown<span class="op">&gt;</span></span></code></pre></div></li>
 <li>Stop the port-forwards (Ctrl-C in the second terminal), then remove
 the release:
-<div class="sourceCode" id="cb25"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="ex">helm</span> uninstall flywheel <span class="at">-n</span> <span class="va">$NS</span> <span class="at">--wait</span> <span class="at">--timeout</span> 10m</span>
-<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="ex">helm</span> uninstall volcano  <span class="at">-n</span> <span class="va">$NS</span> <span class="at">--wait</span> <span class="at">--timeout</span> 10m</span></code></pre></div>
-Expected: <code>release "flywheel" uninstalled</code> and
-<code>release "volcano" uninstalled</code>. The second also removes the
-Volcano CRDs and ClusterRoles (they are templates of that release), and
-with them Volcano's <code>default</code>/<code>root</code> Queues.</li>
+<div class="sourceCode" id="cb21"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="ex">helm</span> uninstall flywheel <span class="at">-n</span> <span class="va">$NS</span> <span class="at">--wait</span> <span class="at">--timeout</span> 10m</span></code></pre></div>
+Expected: <code>release "flywheel" uninstalled</code>.</li>
 <li>Volumes left behind (Postgres StatefulSet PVCs,
 <code>datastore-shared-storage</code> which has a keep policy, NIM cache
-PVCs, training PVCs). List, check, then delete exactly those names:
-<div class="sourceCode" id="cb26"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pvc <span class="at">-n</span> <span class="va">$NS</span></span>
-<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete pvc <span class="at">-n</span> <span class="va">$NS</span> data-flywheel-customizerdb-0 data-flywheel-postgresql-0 <span class="dt">\</span></span>
-<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>  data-flywheel-entity-storedb-0 data-flywheel-evaluatordb-0 datastore-shared-storage</span>
-<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a><span class="co"># plus any NIM cache / training PVC from the list above (names start with modeldeployment- / the job id)</span></span></code></pre></div></li>
-<li>Cluster-scoped leftovers: the NeMo Operator CRDs are never removed
-by Helm. Delete them <strong>only if</strong> 0.3.3 showed
-<code>nemotrainingjobs.nvidia.com</code> as NOT FOUND before the
-install:
-<div class="sourceCode" id="cb27"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get crd <span class="at">-o</span> name <span class="kw">|</span> <span class="fu">grep</span> <span class="at">-E</span> <span class="st">&#39;nemo(entityhandlers|entityvalidators|trainingjobs|trainingworkloads|validationjobs)\.nvidia\.com&#39;</span></span>
-<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete crd nemoentityhandlers.nvidia.com nemoentityvalidators.nvidia.com nemotrainingjobs.nvidia.com <span class="dt">\</span></span>
-<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>  nemotrainingworkloads.nvidia.com nemovalidationjobs.nvidia.com</span></code></pre></div></li>
+PVCs). List, check, then delete exactly those names:
+<div class="sourceCode" id="cb22"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pvc <span class="at">-n</span> <span class="va">$NS</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete pvc <span class="at">-n</span> <span class="va">$NS</span> data-flywheel-postgresql-0 data-flywheel-entity-storedb-0 <span class="dt">\</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>  data-flywheel-evaluatordb-0 datastore-shared-storage</span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a><span class="co"># plus any NIM cache PVC from the list above (names start with modeldeployment-)</span></span></code></pre></div></li>
 <li>Flywheel-only secrets (keep <code>ngc-registry-default</code> and
 <code>ngc-api</code> for RAG):
-<div class="sourceCode" id="cb28"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete secret <span class="at">-n</span> <span class="va">$NS</span> <span class="at">--ignore-not-found</span> hf-secret</span></code></pre></div></li>
+<div class="sourceCode" id="cb23"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete secret <span class="at">-n</span> <span class="va">$NS</span> <span class="at">--ignore-not-found</span> hf-secret</span></code></pre></div></li>
 <li>Verify nothing of the flywheel is left:
-<div class="sourceCode" id="cb29"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get all,pvc,cm,secret,nimservice,nimcache <span class="at">-n</span> <span class="va">$NS</span></span>
-<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get crd <span class="at">-o</span> name <span class="kw">|</span> <span class="fu">grep</span> volcano.sh <span class="kw">||</span> <span class="bu">echo</span> <span class="st">&quot;no volcano CRDs&quot;</span></span>
-<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get clusterrole <span class="at">-o</span> name <span class="kw">|</span> <span class="fu">grep</span> <span class="at">-E</span> <span class="st">&#39;flywheel-|volcano|vcjob-&#39;</span> <span class="kw">||</span> <span class="bu">echo</span> <span class="st">&quot;no flywheel/volcano clusterroles&quot;</span></span>
-<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a><span class="fu">bash</span> deploy/scripts/gpu-free.sh <span class="kw">|</span> <span class="fu">tail</span> <span class="at">-4</span></span></code></pre></div>
-Expected: only the two NGC secrets, the default ServiceAccount objects,
-and (case A) the NIM Operator / ECK pods remain.</li>
+<div class="sourceCode" id="cb24"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get all,pvc,cm,secret,nimservice,nimcache <span class="at">-n</span> <span class="va">$NS</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a><span class="fu">bash</span> deploy/scripts/gpu-free.sh <span class="kw">|</span> <span class="fu">tail</span> <span class="at">-2</span></span></code></pre></div>
+Expected: only the two NGC secrets and the default ServiceAccount
+objects remain. Nothing cluster-wide was created, so there is nothing
+else to remove.</li>
 </ol>
 <hr />
 <h2 id="2-rag-blueprint-2-x-l40s"><span class="num">2.</span> RAG Blueprint (2 x L40S)</h2>
 <h3 id="21-gpu-check"><span class="num">2.1</span> GPU check</h3>
-<div class="sourceCode" id="cb30"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="fu">bash</span> deploy/scripts/gpu-free.sh <span class="kw">|</span> <span class="fu">tail</span> <span class="at">-2</span></span></code></pre></div>
+<div class="sourceCode" id="cb25"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="fu">bash</span> deploy/scripts/gpu-free.sh <span class="kw">|</span> <span class="fu">tail</span> <span class="at">-2</span></span></code></pre></div>
 <p class="stop-note"><strong class="flag stop">STOP</strong> unless it says
 <code>RAG (needs 2 x L40S): OK</code>. Both NIMs are pinned to
 <code>NVIDIA-L40S</code>.</p>
 <h3 id="22-install-nvidia-openshift-overlay--our-overrides"><span class="num">2.2</span> Install
 (NVIDIA OpenShift overlay + our overrides)</h3>
-<div class="sourceCode" id="cb31"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">RAG_PKG</span><span class="op">=</span>deploy/packages/nvidia-blueprint-rag-v2.6.0-nvaie.1.tgz</span>
-<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a><span class="fu">tar</span> xzf <span class="va">$RAG_PKG</span> <span class="at">-C</span> /tmp nvidia-blueprint-rag/values-openshift.yaml</span>
-<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a><span class="ex">helm</span> upgrade <span class="at">--install</span> rag <span class="va">$RAG_PKG</span> <span class="at">-n</span> <span class="va">$NS</span> <span class="dt">\</span></span>
-<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">-f</span> /tmp/nvidia-blueprint-rag/values-openshift.yaml <span class="at">-f</span> deploy/rag/values-nvaie.yaml <span class="at">--timeout</span> 15m</span></code></pre></div>
+<p>Needs approval A5: the release contains one RoleBinding that gives
+the <code>anyuid</code> SCC to the <code>rag-nv-ingest</code>
+ServiceAccount only. If the pre-flight warned that you cannot grant
+anyuid, a cluster-admin runs this step.</p>
+<div class="sourceCode" id="cb26"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">RAG_PKG</span><span class="op">=</span>deploy/packages/nvidia-blueprint-rag-v2.6.0-nvaie.2.tgz</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="fu">tar</span> xzf <span class="va">$RAG_PKG</span> <span class="at">-C</span> /tmp nvidia-blueprint-rag/values-openshift.yaml</span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a><span class="ex">helm</span> upgrade <span class="at">--install</span> rag <span class="va">$RAG_PKG</span> <span class="at">-n</span> <span class="va">$NS</span> <span class="dt">\</span></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">-f</span> /tmp/nvidia-blueprint-rag/values-openshift.yaml <span class="at">-f</span> deploy/rag/values-nvaie.yaml <span class="at">--timeout</span> 15m</span></code></pre></div>
 <p>Expected: <code>STATUS: deployed</code>. (No <code>--wait</code>: the
 NIMs take 20-60 minutes on first start.)</p>
 <p>Right after the install, as NVIDIA's OpenShift guide requires (the
 NIM Operator creates <code>nim-cache-sa</code>):</p>
-<div class="sourceCode" id="cb32"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sleep</span> 30<span class="kw">;</span> <span class="ex">oc</span> secrets link nim-cache-sa ngc-registry-default <span class="at">--for</span><span class="op">=</span>pull <span class="at">-n</span> <span class="va">$NS</span></span>
-<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete pod <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-l</span> app.nvidia.com/nim-cache <span class="at">--ignore-not-found</span>   <span class="co"># only if they were in ImagePullBackOff</span></span></code></pre></div>
+<div class="sourceCode" id="cb27"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sleep</span> 30<span class="kw">;</span> <span class="ex">oc</span> secrets link nim-cache-sa ngc-registry-default <span class="at">--for</span><span class="op">=</span>pull <span class="at">-n</span> <span class="va">$NS</span></span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete pod <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-l</span> app.nvidia.com/nim-cache <span class="at">--ignore-not-found</span>   <span class="co"># only if they were in ImagePullBackOff</span></span></code></pre></div>
 <h3 id="23-wait-for-everything-to-run"><span class="num">2.3</span> Wait for everything to
 run</h3>
-<div class="sourceCode" id="cb33"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get nimcache,nimservice,elasticsearch <span class="at">-n</span> <span class="va">$NS</span></span>
-<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pods <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-o</span> wide</span></code></pre></div>
+<div class="sourceCode" id="cb28"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get nimcache,nimservice <span class="at">-n</span> <span class="va">$NS</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pods <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-o</span> wide</span></code></pre></div>
 <p>Expected (after 20-60 minutes):</p>
 <pre><code>nimcache  nemotron-embedding-ms-cache   Ready
 nimcache  nim-llm-cache                 Ready
 nimservice nemotron-embedding-ms        Ready
 nimservice nim-llm                      Ready
-elasticsearch rag-eck-elasticsearch  HEALTH green|yellow  NODES 1  PHASE Ready
 
 ingestor-server-...                      1/1 Running
-rag-eck-elasticsearch-es-default-0       1/1 Running
+rag-elasticsearch-...                    1/1 Running
 nemotron-embedding-ms-...                1/1 Running   &lt;L40S node&gt;
 nim-llm-...                              1/1 Running   &lt;L40S node&gt;
 rag-nv-ingest-...                        1/1 Running
 rag-redis-master-0                       1/1 Running
 rag-seaweedfs-all-in-one-...             1/1 Running
 rag-server-...                           1/1 Running</code></pre>
-<p>If <code>elasticsearch</code> shows no HEALTH after 5 minutes, the
-ECK operator is not managing this namespace (see 0.4). Confirm the GPU
-count is exactly 2:</p>
-<div class="sourceCode" id="cb35"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pods <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-o</span> json <span class="kw">|</span> <span class="ex">jq</span> <span class="st">&#39;[.items[] | select(.status.phase==&quot;Running&quot;) | .spec.containers[].resources.limits[&quot;nvidia.com/gpu&quot;] // empty | tonumber] | add&#39;</span></span></code></pre></div>
-<p>Expected: <code>2</code>.</p>
+<p>Elasticsearch is a plain Deployment (no ECK operator). Check it:</p>
+<div class="sourceCode" id="cb30"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> exec <span class="at">-n</span> <span class="va">$NS</span> deploy/rag-elasticsearch <span class="at">--</span> curl <span class="at">-s</span> localhost:9200/_cluster/health</span></code></pre></div>
+<p>Expected: <code>"status":"green"</code> (or <code>yellow</code>).
+Confirm which SCC each pod got and that the GPU count is exactly 2:</p>
+<div class="sourceCode" id="cb31"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pods <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-o</span> custom-columns=POD:.metadata.name,SCC:.metadata.annotations.openshift\\.io/scc</span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pods <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-o</span> json <span class="kw">|</span> <span class="ex">jq</span> <span class="st">&#39;[.items[] | select(.status.phase==&quot;Running&quot;) | .spec.containers[].resources.limits[&quot;nvidia.com/gpu&quot;] // empty | tonumber] | add&#39;</span></span></code></pre></div>
+<p>Expected: <code>anyuid</code> only for
+<code>rag-nv-ingest-...</code>, <code>nonroot</code> for the NIM pods,
+<code>restricted-v2</code> for the rest; GPU count <code>2</code>.</p>
 <h3 id="24-ingest-a-sample-text-document-and-ask-a-question"><span class="num">2.4</span> Ingest
 a sample text document and ask a question</h3>
 <p>Second terminal (leave running):</p>
-<div class="sourceCode" id="cb36"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> port-forward <span class="at">-n</span> nvaie-test svc/ingestor-server 8082:8082 <span class="kw">&amp;</span></span>
-<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> port-forward <span class="at">-n</span> nvaie-test svc/rag-server 8081:8081 <span class="kw">&amp;</span></span>
-<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a><span class="bu">wait</span></span></code></pre></div>
+<div class="sourceCode" id="cb32"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> port-forward <span class="at">-n</span> nvaie-test svc/ingestor-server 8082:8082 <span class="kw">&amp;</span></span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> port-forward <span class="at">-n</span> nvaie-test svc/rag-server 8081:8081 <span class="kw">&amp;</span></span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a><span class="bu">wait</span></span></code></pre></div>
 <p>First terminal:</p>
-<div class="sourceCode" id="cb37"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="fu">mkdir</span> <span class="at">-p</span> /tmp/rag-out <span class="kw">&amp;&amp;</span> <span class="va">OUT</span><span class="op">=</span>/tmp/rag-out <span class="fu">bash</span> deploy/scripts/rag-test.sh <span class="kw">|</span> <span class="fu">tee</span> /tmp/rag-out/rag-test.txt</span></code></pre></div>
+<div class="sourceCode" id="cb33"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="fu">mkdir</span> <span class="at">-p</span> /tmp/rag-out <span class="kw">&amp;&amp;</span> <span class="va">OUT</span><span class="op">=</span>/tmp/rag-out <span class="fu">bash</span> deploy/scripts/rag-test.sh <span class="kw">|</span> <span class="fu">tee</span> /tmp/rag-out/rag-test.txt</span></code></pre></div>
 <p>The sample <code>deploy/rag/sample/nvaie-validation-note.txt</code>
 contains invented facts (a "secret validation phrase"). The test asks
 for them <strong>with</strong> the knowledge base, which must answer
@@ -989,43 +862,37 @@ RESULT: ALL CHECKS PASSED</code></pre>
 evidence</h3>
 <p>Success criteria: a sample text document is ingested; a question
 returns an answer grounded in it (2.4 all PASS).</p>
-<div class="sourceCode" id="cb39"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="fu">bash</span> deploy/scripts/evidence.sh rag rag <span class="va">$NS</span> /tmp/rag-out</span></code></pre></div>
+<div class="sourceCode" id="cb35"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="fu">bash</span> deploy/scripts/evidence.sh rag rag <span class="va">$NS</span> /tmp/rag-out</span></code></pre></div>
 <p>Expected:
 <code>Evidence: &lt;path&gt;/evidence-rag-&lt;timestamp&gt;.tar.gz</code>.</p>
 <h3
 id="26-uninstall-rag-and-clean-up-destructive-after-evidence-is-saved"><span class="num">2.6</span>
 Uninstall RAG and clean up (<span class="flag danger">DESTRUCTIVE</span>, after evidence is saved)</h3>
 <ol type="1">
-<li>Stop the port-forwards. Remove the release:
-<div class="sourceCode" id="cb40"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="ex">helm</span> uninstall rag <span class="at">-n</span> <span class="va">$NS</span> <span class="at">--wait</span> <span class="at">--timeout</span> 10m</span></code></pre></div></li>
-<li>Objects Helm keeps on purpose (NIMCache: keep policy; ES volume: ECK
-retains it; SeaweedFS secrets: keep). List, then delete exactly these:
-<div class="sourceCode" id="cb41"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get nimcache,nimservice,elasticsearch,pvc,secret <span class="at">-n</span> <span class="va">$NS</span></span>
-<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete nimcache <span class="at">-n</span> <span class="va">$NS</span> nim-llm-cache nemotron-embedding-ms-cache</span>
-<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete secret <span class="at">-n</span> <span class="va">$NS</span> <span class="at">--ignore-not-found</span> rag-seaweedfs-s3-secret rag-seaweedfs-sftp-secret</span>
-<span id="cb41-4"><a href="#cb41-4" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pvc <span class="at">-n</span> <span class="va">$NS</span>            <span class="co"># then delete the remaining RAG PVCs by name, e.g.:</span></span>
-<span id="cb41-5"><a href="#cb41-5" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete pvc <span class="at">-n</span> <span class="va">$NS</span> elasticsearch-data-rag-eck-elasticsearch-es-default-0</span></code></pre></div></li>
+<li>Stop the port-forwards. Remove the release (this also removes the
+anyuid RoleBinding and the Elasticsearch, ingestor and SeaweedFS
+volumes, which are part of the release):
+<div class="sourceCode" id="cb36"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="ex">helm</span> uninstall rag <span class="at">-n</span> <span class="va">$NS</span> <span class="at">--wait</span> <span class="at">--timeout</span> 10m</span></code></pre></div></li>
+<li>Objects Helm keeps on purpose (NIMCache: keep policy; SeaweedFS
+secrets: keep). List, then delete exactly these:
+<div class="sourceCode" id="cb37"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get nimcache,nimservice,pvc,secret <span class="at">-n</span> <span class="va">$NS</span></span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete nimcache <span class="at">-n</span> <span class="va">$NS</span> nim-llm-cache nemotron-embedding-ms-cache</span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete secret <span class="at">-n</span> <span class="va">$NS</span> <span class="at">--ignore-not-found</span> rag-seaweedfs-s3-secret rag-seaweedfs-sftp-secret</span>
+<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pvc <span class="at">-n</span> <span class="va">$NS</span>            <span class="co"># then delete any remaining RAG PVC by name</span></span></code></pre></div></li>
 <li>Verify:
-<div class="sourceCode" id="cb42"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get all,pvc,nimcache,nimservice,elasticsearch <span class="at">-n</span> <span class="va">$NS</span></span></code></pre></div>
-Expected: no RAG objects left (only operators installed in 0.4, if
-any).</li>
+<div class="sourceCode" id="cb38"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get all,pvc,nimcache,nimservice,rolebinding <span class="at">-n</span> <span class="va">$NS</span></span></code></pre></div>
+Expected: no RAG objects left.</li>
 </ol>
 <hr />
-<h2 id="3-final-clean-up-only-for-what-we-installed-in-04"><span class="num">3.</span> Final
-clean-up (only for what <em>we</em> installed in 0.4)</h2>
-<p class="danger-note"><span class="flag danger">DESTRUCTIVE</span>. Removing an operator's CRDs deletes every object of that
-kind <strong>cluster-wide</strong>. Do it only if 0.3.3 showed the CRD
-as NOT FOUND before our work, and the client agrees.</p>
-<div class="sourceCode" id="cb43"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a><span class="ex">helm</span> uninstall nim-operator <span class="at">-n</span> <span class="va">$NS</span> <span class="at">--wait</span>      <span class="co"># case A only</span></span>
-<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a><span class="ex">helm</span> uninstall elastic-operator <span class="at">-n</span> <span class="va">$NS</span> <span class="at">--wait</span>  <span class="co"># only if installed in 0.4</span></span>
-<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get crd <span class="at">-o</span> name <span class="kw">|</span> <span class="fu">grep</span> <span class="at">-E</span> <span class="st">&#39;\.apps\.nvidia\.com|\.k8s\.elastic\.co&#39;</span>     <span class="co"># review</span></span>
-<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a><span class="co"># then, per CRD listed:  oc delete crd &lt;name&gt;</span></span>
-<span id="cb43-5"><a href="#cb43-5" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete secret <span class="at">-n</span> <span class="va">$NS</span> ngc-registry-default ngc-api    <span class="co"># if the client wants the namespace empty</span></span></code></pre></div>
+<h2 id="3-final-clean-up"><span class="num">3.</span> Final clean-up</h2>
+<p>Nothing cluster-wide was created, so only the two secrets remain.
+Delete them if the client wants the namespace empty (DESTRUCTIVE):</p>
+<div class="sourceCode" id="cb39"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete secret <span class="at">-n</span> <span class="va">$NS</span> ngc-registry-default ngc-api</span></code></pre></div>
 <hr />
 <h2 id="4-troubleshooting"><span class="num">4.</span> Troubleshooting</h2>
 <div class="table-wrap"><table>
@@ -1040,38 +907,39 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb43-1"><a href=
 <tr class="odd">
 <td>Pod
 <code>Forbidden: unable to validate against any security context constraint</code></td>
-<td>Pod asks for a fixed UID/root (often pods created at runtime:
-training, NIM, eval jobs)</td>
+<td>Pod asks for a fixed UID/root (often pods created at runtime: NIM,
+eval jobs)</td>
 <td><code>oc describe</code> the owner; capture it; ask the client for
-an SCC decision (5.2). Do not grant anyuid on your own.</td>
+an SCC decision (A7). Do not grant anyuid on your own.</td>
 </tr>
 <tr class="even">
+<td><code>rag-nv-ingest</code> not created,
+<code>unable to validate against any security context constraint</code></td>
+<td>the anyuid RoleBinding (A5) is missing or was not allowed</td>
+<td><code>oc get rolebinding -n $NS rag-server-anyuid-scc</code>; a
+cluster-admin re-runs 2.2</td>
+</tr>
+<tr class="odd">
 <td><code>ImagePullBackOff</code> on non-nvcr images</td>
 <td>registry blocked</td>
 <td>re-run the pre-flight (0.3); agree a mirror with the client</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>NIMCache <code>ImagePullBackOff</code></td>
 <td>pull secret not linked to <code>nim-cache-sa</code></td>
 <td>2.2 <code>oc secrets link ...</code>, delete the cache pods</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>RAG <code>nim-llm-cache</code> fails "no matching profile"</td>
 <td>the profile filter does not fit the tag</td>
 <td><code>helm upgrade</code> with
 <code>--set-json 'nimOperator.nim-llm.model={"tensorParallelism":"1"}'</code></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>NIM LLM OOM on L40S</td>
 <td>context too long for 48 GB</td>
 <td>add env <code>NIM_MAX_MODEL_LEN=8192</code> to
 <code>nimOperator.nim-llm.env</code></td>
-</tr>
-<tr class="even">
-<td>Training pod Pending, <code>Insufficient nvidia.com/gpu</code></td>
-<td>the NIMs took the GPU type the layout pinned</td>
-<td>run 0.5; <code>helm upgrade</code> with the other layout file (same
-command as 1.2); NeMo Customizer restarts; re-submit a job (1.4)</td>
 </tr>
 <tr class="odd">
 <td>Flywheel job stuck before evals</td>
@@ -1079,6 +947,12 @@ command as 1.2); NeMo Customizer restarts; re-submit a job (1.4)</td>
 <td><code>oc get nimservice</code>, judge pod logs</td>
 </tr>
 <tr class="even">
+<td><code>nemo-gateway</code> CrashLoopBackOff, log
+<code>host not found in upstream</code></td>
+<td>a NeMo service it routes to does not exist</td>
+<td><code>oc logs deploy/nemo-gateway</code>; send us the output</td>
+</tr>
+<tr class="odd">
 <td><code>df-*</code> pods crash with <code>uv</code>/permission
 errors</td>
 <td>uv trying to sync/write</td>
@@ -1086,19 +960,32 @@ errors</td>
 <code>UV_CACHE_DIR=/tmp/uv-cache</code>; check
 <code>oc exec ... env</code></td>
 </tr>
+<tr class="even">
+<td>RAG answer "Sorry, there was an error", rag-server log
+<code>Permission denied: './tmp-data'</code></td>
+<td><code>TEMP_DIR</code> not set</td>
+<td>values set <code>TEMP_DIR=/tmp-data</code>; check
+<code>oc exec deploy/rag-server -- env | grep TEMP_DIR</code></td>
+</tr>
+<tr class="odd">
+<td><code>rag-elasticsearch</code> not Ready</td>
+<td>volume not writable, or out of memory</td>
+<td><code>oc logs deploy/rag-elasticsearch</code>;
+<code>oc describe pod -l app=rag-elasticsearch</code></td>
+</tr>
+<tr class="even">
+<td>RAG ingestion stays <code>PENDING</code>, nv-ingest log
+<code>killed due to memory pressure</code></td>
+<td>nv-ingest at its memory limit</td>
+<td>raise <code>nv-ingest.resources.limits.memory</code> in
+<code>deploy/rag/values-nvaie.yaml</code> (24Gi set),
+<code>helm upgrade</code> as in 2.2</td>
+</tr>
 <tr class="odd">
 <td><code>rag-nv-ingest</code> restarts with
 <code>pthread_create failed</code></td>
 <td>kubelet <code>podPidsLimit</code></td>
 <td>keep NVIDIA's caps (<code>RAG_NV_INGEST_DETECTED_CPUS=4</code>)</td>
-</tr>
-<tr class="even">
-<td>Training job stays <code>Pending</code>, no training pod</td>
-<td>Volcano scheduler not running, or the Queue <code>default</code> is
-missing</td>
-<td><code>oc get pods -n $NS -l app=volcano-scheduler</code>;
-<code>oc get queue</code>;
-<code>oc logs -n $NS deploy/volcano-scheduler</code></td>
 </tr>
 </tbody>
 </table></div>
@@ -1111,32 +998,27 @@ verified (could not be tested without the cluster)</h3>
 <li><strong>8B NIM tag <code>1.8.3</code></strong>: chosen from NVIDIA's
 flywheel config and the NIM 1.8 support matrix; never started on this
 cluster's L40S.</li>
-<li><strong>Pulls from docker.io,
-registry.redhat.io</strong> (and the IDMS effect): the pre-flight (0.3)
-tests them.</li>
+<li><strong>Pulls from docker.io, registry.redhat.io</strong> (and the
+IDMS effect): the pre-flight (0.3) tests them.</li>
 <li><strong>restricted-v2 at runtime</strong>: static checks pass for
-every chart-rendered pod except <code>rag-nv-ingest</code> (anyuid via
-NVIDIA's RoleBinding). Not checkable offline: pods created at runtime by
-NeMo Customizer/Operator (training), NeMo Evaluator (eval Jobs),
-deployment-management and the NIM Operator (NIM pods), Volcano images
-under a random UID, the evaluator DB migration without root,
-Gitea/data-store without UID 1000.</li>
-<li><strong>NeMo Customizer LoRA on L40S</strong> for
-<code>meta/llama-3.2-1b-instruct</code>: NeMo 25.8 ships an L40 profile
-for this exact target (sft/LoRA, 1 GPU, TP1), so expected to work; never
-run here.</li>
+every chart-rendered pod except <code>rag-nv-ingest</code> (anyuid, A5).
+Run locally under restricted-v2 conditions (random UID, group 0, no
+capabilities): Elasticsearch 9.3.0, redis, SeaweedFS, rag-server and
+ingestor-server, including document listing and a knowledge-base query.
+Not checkable offline: pods created at runtime by NeMo Evaluator (eval
+Jobs), deployment-management and the NIM Operator (NIM pods), the
+evaluator DB migration without root, Gitea/data-store without UID
+1000.</li>
 <li><strong>deployment-management 25.8 with the client's NIM Operator
 3.1.2</strong>: NeMo 25.8 bundles 2.0.2.</li>
 <li><strong>NIM placement</strong>: deployment-management cannot set a
 nodeSelector; NIMs take any free GPU (by decision).</li>
 <li><strong>Kueue</strong> behaviour for runtime-created pods if
 <code>nvaie-test</code> is Kueue-managed (0.3.4).</li>
-<li><strong>ECK 3.3.2 / Elasticsearch 9.3.0</strong> on this cluster;
-ECK webhook disabled in our install.</li>
-<li><strong>Volcano 1.15.4 with NeMo 25.8</strong>: NVIDIA ships and
-tests 1.9.0, which does not support Kubernetes 1.35. NeMo only uses
-Volcano's stable Job/PodGroup/Queue APIs, unchanged since 1.9, so
-expected to work; never run.</li>
+<li><strong>nv-ingest ingestion end to end</strong> (it needs the
+embedding NIM and more memory than our test machine had). nv-ingest
+itself runs as in NVIDIA's OpenShift design (root via anyuid); only its
+memory was raised.</li>
 <li><strong>StorageClass name</strong>
 <code>ocs-storagecluster-ceph-rbd</code> (ODF default name), checked by
 the pre-flight (0.3), including the write test.</li>
@@ -1144,21 +1026,20 @@ the pre-flight (0.3), including the write test.</li>
 <code>{tensorParallelism: "1", gpus: [{product: l40s}]}</code> for the
 8B tag.</li>
 <li>The UBI nginx gateway image in the cluster (pull checked by the
-pre-flight; function verified by 1.6's Customizer/Evaluator
-queries).</li>
+pre-flight; function verified by 1.6's Evaluator query).</li>
 <li>Durations quoted (model downloads, job time) come from NVIDIA docs,
 not measured here.</li>
 <li>CPU/memory requests/limits of pods NeMo creates at runtime (flywheel
-NIMs + their cache Jobs, Customizer training pods). Our charts set them
-for every pod they render, and for the Evaluator's runtime Job template.
-Under a strict quota these runtime pods need a LimitRange (0.3.1).</li>
+NIMs + their cache Jobs). Our charts set them for every pod they render,
+and for the Evaluator's runtime Job template. Under a strict quota these
+runtime pods need a LimitRange (0.3.1).</li>
 <li>The flywheel image starting under a random UID with
 <code>UV_NO_SYNC=1</code> (upstream image runs as root and re-syncs at
 start; see <code>deploy/PATCHES.md</code> F7).</li>
 </ol>
 <h3 id="52-needs-client-approval"><span class="num">5.2</span> Needs client approval</h3>
 <p>See <strong>"Client approvals required"</strong> at the top of this
-runbook (items A1 to A8).</p>
+runbook (A5, A6, A7, A8).</p>
 </main>
 </div>
 <script>

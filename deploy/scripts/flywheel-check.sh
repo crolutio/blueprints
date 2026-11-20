@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Flywheel success check. Needs two port-forwards (see RUNBOOK 1.4):
+# Flywheel success check, EVALUATION MODE (fine-tuning is off: customization_enabled: false).
+# Needs two port-forwards (see RUNBOOK 1.4):
 #   flywheel API  -> localhost:8000   (oc port-forward svc/df-api-service 8000:8000)
 #   NeMo gateway  -> localhost:8001   (oc port-forward svc/nemo-gateway 8001:80)
 # Prints PASS/FAIL per criterion; exit 0 only if all pass.
@@ -20,15 +21,7 @@ check "job status is completed"                     "$(jq '.status=="completed"'
 check "judge deployment is ready"                   "$(jq '.llm_judge.deployment_status|tostring|test("ready|completed")' <<<"$J")"
 check "base-eval has judge scores"                   "$(jq '[.nims[].evaluations[]? | select(.eval_type=="base-eval") | .scores | length > 0] | any' <<<"$J")"
 check "icl-eval has judge scores"                    "$(jq '[.nims[].evaluations[]? | select(.eval_type=="icl-eval") | .scores | length > 0] | any' <<<"$J")"
-check "customized-eval has judge scores"             "$(jq '[.nims[].evaluations[]? | select(.eval_type=="customized-eval") | .scores | length > 0] | any' <<<"$J")"
-check "a customization produced a customized model"  "$(jq '[.nims[].customizations[]? | select(.customized_model != null and (.progress // 0) >= 100)] | any' <<<"$J")"
-
-echo; echo "== NeMo Customizer jobs (via in-cluster gateway)"
-curl -fsS "$GW/v1/customization/jobs" 2>/dev/null \
-  | jq '[.data[]? | {id, status, config, output_model, created_at, updated_at}]' \
-  || echo "(could not query customizer through the gateway)"
-CUST_OK="$(curl -fsS "$GW/v1/customization/jobs" 2>/dev/null | jq '[.data[]? | select(.status=="completed")] | length > 0' 2>/dev/null || echo false)"
-check "NeMo Customizer reports >= 1 completed job"   "$CUST_OK"
+check "fine-tuning skipped as configured (evaluation mode)" "$(jq '[.nims[].customizations[]?] | length == 0' <<<"$J")"
 
 echo; echo "== NeMo Evaluator jobs"
 curl -fsS "$GW/v1/evaluation/jobs" 2>/dev/null \

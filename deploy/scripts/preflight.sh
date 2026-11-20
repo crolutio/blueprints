@@ -41,7 +41,7 @@ if command -v oc >/dev/null; then
 fi
 if (cd "$D/packages" && sha256sum -c --quiet SHA256SUMS >/dev/null 2>&1); then pass "chart packages intact (SHA256SUMS)"
 else fail "chart packages do not match SHA256SUMS" "re-copy the deploy/packages folder"; fi
-if grep -q '"1.8.3"' "$D/flywheel/values-nvaie-common.yaml" && grep -q '"1.8.3"' "$D/rag/values-nvaie.yaml"; then
+if grep -q '"1.8.3"' "$D/flywheel/values-nvaie.yaml" && grep -q '"1.8.3"' "$D/rag/values-nvaie.yaml"; then
   pass "8B model tag 1.8.3 set in both values files"
 else fail "8B model tag not set in the values files" "re-copy deploy/flywheel and deploy/rag"; fi
 
@@ -54,10 +54,16 @@ fi
 pass "logged in as $who ($(oc whoami --show-server 2>/dev/null))"
 phase=$(oc get ns "$NS" -o jsonpath='{.status.phase}' 2>/dev/null)
 [ "$phase" = Active ] && pass "namespace $NS is Active" || { fail "namespace $NS not found" "ask the client to create namespace $NS"; echo; echo "RESULT: NOT READY"; exit 1; }
-for r in customresourcedefinitions clusterroles; do
-  [ "$(oc auth can-i create $r 2>/dev/null)" = yes ] && pass "can create $r" \
-    || fail "cannot create $r (needed for the flywheel and the operators)" "a cluster-admin must run the installs (RUNBOOK 0.4 and 1.2)"
+# Both blueprints install only namespaced objects (no CRDs, no ClusterRoles): namespace rights are enough.
+for r in deployments statefulsets services configmaps secrets persistentvolumeclaims roles rolebindings serviceaccounts nimservices.apps.nvidia.com nimcaches.apps.nvidia.com; do
+  [ "$(oc auth can-i create $r -n "$NS" 2>/dev/null)" = yes ] && pass "can create $r in $NS" \
+    || fail "cannot create $r in $NS" "ask the client for admin rights in namespace $NS (or have a cluster-admin run the installs)"
 done
+# RAG only: nv-ingest must run as root -> RoleBinding to the anyuid SCC for ONE service account (approval A5).
+# Creating that RoleBinding requires the installer to hold "use" on the anyuid SCC (RBAC escalation check).
+if [ "$(oc auth can-i use securitycontextconstraints/anyuid -n "$NS" 2>/dev/null)" = yes ]; then
+  pass "can grant anyuid to the nv-ingest service account (RAG only, approval A5)"
+else warn "cannot grant anyuid in $NS (RAG only; the flywheel does not need it)" "before the RAG install a cluster-admin must approve A5 (anyuid for service account rag-nv-ingest only), or run the RAG install"; fi
 
 # ---------------------------------------------------------------- 0.3.1 quotas
 section "Quotas and limits (0.3.1)"
@@ -95,22 +101,14 @@ if crd nimservices.apps.nvidia.com; then
   elif ver_ge "$t" 3.0.2; then pass "NIM Operator $t present (>= 3.0.2): nothing to install"
   else fail "NIM Operator $t is older than 3.0.2" "ask the client to upgrade the NIM Operator (RAG needs >= 3.0.2)"; fi
 else warn "NIM Operator not installed" "with client approval (A3), install it: RUNBOOK 0.4, NIM Operator command"; fi
-if crd elasticsearches.elasticsearch.k8s.elastic.co; then
-  pass "ECK (Elasticsearch operator) present: nothing to install (RUNBOOK 2.3 checks it manages $NS)"
-else warn "ECK operator not installed" "with client approval (A4), install it: RUNBOOK 0.4, ECK command"; fi
-if crd queues.scheduling.volcano.sh; then
-  fail "Volcano is already installed by someone else" "STOP: do not install a second Volcano; contact us"
-else pass "Volcano not installed: we install v1.15.4 before the flywheel (RUNBOOK 1.2, approval A1)"; fi
-if crd nemotrainingjobs.nvidia.com; then
-  fail "NeMo Operator CRDs already exist (someone else runs NeMo)" "STOP: contact us before installing the flywheel"
-else pass "no other NeMo installation"; fi
+info "not needed (nothing to check): ECK operator (RAG uses a plain Elasticsearch Deployment), Volcano and NeMo Operator (fine-tuning is off)"
 
 # ---------------------------------------------------------------- 0.3.4 kueue
 section "Kueue (0.3.4)"
 labels=$(oc get ns "$NS" -o jsonpath='{.metadata.labels}' 2>/dev/null)
 lq=$(oc get localqueue -n "$NS" -o name 2>/dev/null)
 if grep -qi kueue <<<"$labels" || [ -n "$lq" ]; then
-  warn "namespace looks Kueue-managed (${lq:-label only})" "set kueue.queueName: <localqueue> in deploy/flywheel/values-nvaie-common.yaml and deploy/rag/values-nvaie.yaml, and ask the client to exempt $NS for pods NeMo creates (RUNBOOK 0.3.4)"
+  warn "namespace looks Kueue-managed (${lq:-label only})" "set kueue.queueName: <localqueue> in deploy/flywheel/values-nvaie.yaml and deploy/rag/values-nvaie.yaml, and ask the client to exempt $NS for pods NeMo creates (RUNBOOK 0.3.4)"
 else pass "namespace is not Kueue-managed"; fi
 
 # ---------------------------------------------------------------- 0.3.5 pid limit

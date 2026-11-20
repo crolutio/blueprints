@@ -12,14 +12,11 @@ FLYWHEEL_IMAGES=(
   docker.io/library/redis:7.2.5-alpine
   docker.io/bitnamilegacy/postgresql:16.1.0-debian-11-r20
   docker.io/bitnamilegacy/postgresql:16.2.0-debian-11-r1
-  docker.io/volcanosh/vc-controller-manager:v1.15.4
-  docker.io/volcanosh/vc-scheduler:v1.15.4
   registry.redhat.io/ubi9/nginx-126:1-1777855212
   nvcr.io/nvidia/nemo-microservices/entity-store:25.08
 )
 RAG_IMAGES=(
   docker.io/library/elasticsearch:9.3.0
-  docker.io/elastic/eck-operator:3.3.2
   docker.io/library/redis:8.2.1
   docker.io/chrislusf/seaweedfs:3.73
   nvcr.io/nvidia/blueprint/rag-server:2.6.0

@@ -23,13 +23,11 @@ cap 10-gpu-free       bash "$D/gpu-free.sh"
 cap 11-events         oc get events -n "$NS" --sort-by=.lastTimestamp
 cap 12-scc-used       bash -c "oc get pods -n $NS -o custom-columns=POD:.metadata.name,SCC:.metadata.annotations.openshift\\.io/scc,SA:.spec.serviceAccountName"
 if [ "$KIND" = flywheel ]; then
-  cap 20-volcano      oc get jobs.batch.volcano.sh,podgroups.scheduling.volcano.sh -n "$NS" -o wide
-  cap 21-nemo-crs     oc get nemotrainingjobs.nvidia.com,nemoentityhandlers.nvidia.com -n "$NS" -o wide
+  cap 20-eval-jobs    oc get jobs -n "$NS" -o wide
   for d in df-api-deployment df-celery-worker-deployment df-celery-parent-worker-deployment; do oc logs -n "$NS" deploy/$d --tail=2000 > "$E/logs/$d.log" 2>&1; done
-  for d in $(oc get deploy -n "$NS" -o name | grep -E 'customizer|evaluator|deployment-management|nim-proxy|entity-store|data-store'); do oc logs -n "$NS" "$d" --all-containers --tail=2000 > "$E/logs/$(basename "$d").log" 2>&1; done
+  for d in $(oc get deploy -n "$NS" -o name | grep -E 'evaluator|deployment-management|nim-proxy|entity-store|data-store'); do oc logs -n "$NS" "$d" --all-containers --tail=2000 > "$E/logs/$(basename "$d").log" 2>&1; done
 else
-  cap 20-eck          oc get elasticsearch -n "$NS" -o wide
-  for d in rag-server ingestor-server rag-nv-ingest; do oc logs -n "$NS" deploy/$d --tail=2000 > "$E/logs/$d.log" 2>&1; done
+  for d in rag-server ingestor-server rag-nv-ingest rag-elasticsearch; do oc logs -n "$NS" deploy/$d --tail=2000 > "$E/logs/$d.log" 2>&1; done
 fi
 for p in $(oc get pods -n "$NS" -o name | grep -E 'nim-llm|nemotron-embedding|modeldeployment|llama'); do oc logs -n "$NS" "$p" --tail=500 > "$E/logs/$(basename "$p").log" 2>&1; done
 for f in "$@"; do [ -e "$f" ] && cp -r "$f" "$E/"; done

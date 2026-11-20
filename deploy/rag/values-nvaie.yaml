@@ -10,20 +10,25 @@
 #   1 x Embedding NIM  nvidia/llama-nemotron-embed-1b-v2   (NIMService nemotron-embedding-ms)
 # Disabled: reranker, VLM embedder/reranker/VLM/captioning, all nv-ingest extraction NIMs
 # (page elements, graphic elements, table structure, OCR, nemotron-parse, audio),
-# Milvus, frontend, Routes, observability.
+# Milvus, frontend, Routes, observability, ECK operator.
 #
 # CONFIG items: namespace (helm -n), StorageClass, Kueue label, nodeSelectors.
-# Requires on the cluster: NVIDIA NIM Operator (NIMCache/NIMService CRDs) and the ECK
-# operator (Elasticsearch CRD). Both cluster-scoped -> RUNBOOK 0.3.
+# Requires on the cluster: the NVIDIA NIM Operator (already installed by the client).
+# Creates NO cluster-scoped objects. Elasticsearch is a plain Deployment in the namespace.
+# OpenShift: everything runs under restricted-v2 except nv-ingest, which must run as root
+# (its Python interpreter lives under /root, mode 700) -> anyuid for that ONE service account.
 # =============================================================================
 
 # CONFIG: Kueue LocalQueue label ("" = off). Applies to rag-server, ingestor-server, NIM pods.
 kueue:
   queueName: ""
 
-# --- OpenShift: keep the chart's anyuid RoleBinding (NVIDIA guide), but no external Routes.
+# --- OpenShift: anyuid RoleBinding for nv-ingest ONLY (NVIDIA's chart grants it to 7 service
+# accounts including "default"), no external Routes.
 openshift:
-  enabled: true                 # renders RoleBinding rag-server-anyuid-scc -> NEEDS CLIENT APPROVAL
+  enabled: true                 # renders RoleBinding rag-server-anyuid-scc -> NEEDS CLIENT APPROVAL (A5)
+  anyuidServiceAccounts:        # PATCH key: replaces the upstream subject list
+    - "{{ .Release.Name }}-nv-ingest"
   routes:
     frontend: {enabled: false}
     ragServer: {enabled: false} # validation is done in-cluster (oc exec / port-forward)
@@ -62,6 +67,13 @@ envVars:
   ENABLE_RERANKER: "False"
   APP_RANKING_SERVERURL: ""
   ENABLE_GUARDRAILS: "False"
+  # Vector DB: plain Elasticsearch (templates/elasticsearch.yaml), not ECK
+  APP_VECTORSTORE_URL: "http://rag-elasticsearch:9200"
+  # Writable temp dir. The default "./tmp-data" is under /workspace (root-only); without anyuid
+  # rag-server runs with a random UID and every knowledge-base query fails with
+  # "Permission denied: './tmp-data'". /tmp-data is world-writable in the image (ingestor-server
+  # already uses it).
+  TEMP_DIR: "/tmp-data"
 
 # --- Ingestor server: text-only extraction ---
 ingestor-server:
@@ -82,6 +94,7 @@ ingestor-server:
     APP_NVINGEST_EXTRACTINFOGRAPHICS: "False"
     APP_NVINGEST_EXTRACTIMAGES: "False"
     SUMMARY_LLM: "meta/llama-3.1-8b-instruct"
+    APP_VECTORSTORE_URL: "http://rag-elasticsearch:9200"
   persistence:
     storageClass: ocs-storagecluster-ceph-rbd   # CONFIG
     size: 5Gi
@@ -100,61 +113,29 @@ seaweedfs:
       storageClass: ocs-storagecluster-ceph-rbd # CONFIG
       size: 5Gi
 
-# --- Elasticsearch (ECK) vector DB, CPU only ---
+# --- Elasticsearch vector DB: plain single-node Deployment, CPU only (no ECK operator/CRDs) ---
+# Same settings as NVIDIA's Docker Compose deployment of this blueprint. Runs under
+# restricted-v2 (random UID, group 0); the PVC is made writable through the pod fsGroup.
 eck-elasticsearch:
+  enabled: false
+elasticsearch:                  # PATCH key (templates/elasticsearch.yaml)
+  enabled: true
   image: docker.io/library/elasticsearch:9.3.0   # docker.elastic.co is blocked on the client cluster; same release from Docker Hub
-  nodeSets:
-  - name: default
-    count: 1
-    config:
-      node.store.allow_mmap: false
-      xpack.security.enabled: false
-      xpack.security.http.ssl.enabled: false
-      xpack.security.transport.ssl.enabled: false
-    volumeClaimTemplates:
-    - metadata:
-        name: elasticsearch-data
-      spec:
-        accessModes: [ReadWriteOnce]
-        storageClassName: ocs-storagecluster-ceph-rbd   # CONFIG
-        resources:
-          requests:
-            storage: 5Gi
-    podTemplate:
-      metadata:
-        labels: {}              # add kueue.x-k8s.io/queue-name here if Kueue is required
-      spec:
-        initContainers:
-        - name: elastic-internal-init-filesystem
-          env:
-          - name: ES_JAVA_OPTS
-            value: "-Xms1g -Xmx1g"
-          resources:
-            requests: {cpu: 100m, memory: 256Mi}
-            limits:   {cpu: 500m, memory: 512Mi}
-        - name: elastic-internal-suspend
-          resources:
-            requests: {cpu: 50m, memory: 64Mi}
-            limits:   {cpu: 200m, memory: 128Mi}
-        containers:
-        - name: elasticsearch
-          env:
-          - name: ES_JAVA_OPTS
-            value: "-Xms1g -Xmx1g"
-          resources:
-            requests: {cpu: 500m, memory: 2Gi}
-            limits:   {cpu: "2",  memory: 2Gi}
-          readinessProbe:
-            exec:
-              command:
-              - bash
-              - -c
-              - |
-                curl -s http://localhost:9200/_cluster/health | grep -q '"status":"green"\|"status":"yellow"'
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 10
+  javaOpts: "-Xms1g -Xmx1g"
+  resources:
+    requests: {cpu: 500m, memory: 2Gi}
+    limits:   {cpu: "2",  memory: 2Gi}
+  podSecurityContext:
+    runAsNonRoot: true
+    seccompProfile: {type: RuntimeDefault}
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities: {drop: ["ALL"]}
+  nodeSelector: {}              # CONFIG
+  persistence:
+    enabled: true
+    storageClass: ocs-storagecluster-ceph-rbd   # CONFIG
+    size: 5Gi
 
 # --- NIMs (NIM Operator) ---
 nimOperator:
@@ -215,9 +196,11 @@ nv-ingest:
   imagePullSecrets:
     - name: ngc-registry-default
   podLabels: {}                 # add kueue.x-k8s.io/queue-name here if Kueue is required
+  # ~55 Python processes (32 API workers + Ray actors). NVIDIA's default is a 24Gi request with no
+  # limit; at the memory limit Ray kills its own workers and ingestion hangs in PENDING.
   resources:
-    requests: {cpu: "2", memory: 8Gi}
-    limits:   {cpu: "8", memory: 16Gi}
+    requests: {cpu: "2", memory: 16Gi}
+    limits:   {cpu: "8", memory: 24Gi}
   envVars:
     COMPONENTS_TO_READY_CHECK: ""          # do not wait for the disabled extraction NIMs
     INSTALL_AUDIO_EXTRACTION_DEPS: "false" # avoid runtime package downloads

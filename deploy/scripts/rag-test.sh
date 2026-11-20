@@ -48,7 +48,7 @@ ask() { # $1 = use_knowledge_base (true/false), $2 = file for the raw SSE stream
   curl -sS -N -X POST "$RAG/v1/generate" -H 'Content-Type: application/json' -d "{
     \"messages\": [{\"role\": \"user\", \"content\": \"$Q\"}],
     \"use_knowledge_base\": $1, \"collection_names\": [\"$COL\"],
-    \"enable_reranker\": false, \"reranker_top_k\": 0, \"vdb_top_k\": 5,
+    \"enable_reranker\": false, \"reranker_top_k\": 5, \"vdb_top_k\": 5,
     \"enable_citations\": true, \"max_tokens\": 256, \"temperature\": 0 }" > "$2"
   sed -n 's/^data: //p' "$2" | jq -rj 'select(type=="object") | (.choices[0].delta.content // .choices[0].message.content // "")' 2>/dev/null
 }
