@@ -189,8 +189,20 @@ diff -ruN '--exclude=charts' rag/deploy/helm/nvidia-blueprint-rag/templates/elas
 +{{- end }}
 diff -ruN '--exclude=charts' rag/deploy/helm/nvidia-blueprint-rag/templates/embedding-nim.yaml deploy/rag/chart/templates/embedding-nim.yaml
 --- rag/deploy/helm/nvidia-blueprint-rag/templates/embedding-nim.yaml	2026-11-19 15:18:47.815551011 +0400
-+++ deploy/rag/chart/templates/embedding-nim.yaml	2026-11-19 15:32:36.431006703 +0400
-@@ -24,6 +24,10 @@
++++ deploy/rag/chart/templates/embedding-nim.yaml	2026-11-20 13:20:33.709320069 +0400
+@@ -12,6 +12,11 @@
+       modelPuller: "{{ $nimModel.image.repository }}:{{ $nimModel.image.tag }}"
+       pullSecret: {{ .Values.imagePullSecret.name }}
+       authSecret: {{ .Values.ngcApiSecret.name }}
++      {{- /* PATCH(nvaie): optional profile filter (upstream caches every profile in the manifest) */}}
++      {{- with $nimModel.model }}
++      model:
++{{ toYaml . | nindent 8 }}
++      {{- end }}
+   {{- with $nimModel.tolerations }}
+   tolerations:
+ {{ toYaml . | nindent 4 }}
+@@ -24,6 +29,10 @@
        {{- end }}
        size: {{ $nimModel.storage.pvc.size | default "50Gi" }}
        volumeAccessMode: {{ $nimModel.storage.pvc.volumeAccessMode | default "ReadWriteMany" }}
@@ -201,7 +213,7 @@ diff -ruN '--exclude=charts' rag/deploy/helm/nvidia-blueprint-rag/templates/embe
  ---
  apiVersion: apps.nvidia.com/v1alpha1
  kind: NIMService
-@@ -41,6 +45,10 @@
+@@ -41,6 +50,10 @@
      nimCache:
        name: {{ $nimModel.service.name }}-cache
    replicas: {{ $nimModel.replicas | default 1 }}

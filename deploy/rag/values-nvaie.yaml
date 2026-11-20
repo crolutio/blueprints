@@ -152,9 +152,16 @@ nimOperator:
     nodeSelector:
       nvidia.com/gpu.product: NVIDIA-L40S      # CONFIG
     tolerations: []
-    # Profile filter for the NIMCache download: single-GPU profiles for L40S only.
+    # Profile filter for the NIMCache download. Every key is set on purpose: the chart's defaults
+    # (engine vllm, precision fp8) would otherwise be merged in, and NVIDIA's 1.8.3 manifest has no
+    # vLLM fp8 L40S profile ("no profiles are selected for caching"). Checked against the real
+    # manifest with NIM Operator 3.1.2: selects exactly 1 profile, ad17776f... (L40S, TP1, fp8,
+    # TensorRT-LLM, throughput).
     model:
+      engine: tensorrt_llm
+      precision: fp8
       tensorParallelism: "1"
+      lora: false
       gpus:
       - product: "l40s"
     storage:
@@ -172,6 +179,10 @@ nimOperator:
 
   nvidia-nim-llama-nemotron-embed-1b-v2:
     enabled: true
+    # PATCH key: cache only the L40S profile (compute capability 8.9, fp16, TensorRT). Without it the
+    # operator downloads all 11 profiles of NIM 1.13.0 (~20 GB, more than the 20Gi volume).
+    model:
+      profiles: ["b313b88dbb2e4bf4fe60311a612e6216fe106be02375baa2e1d21cf8e24e5809"]
     resources:
       requests: {nvidia.com/gpu: 1, cpu: "1", memory: 8Gi}
       limits:   {nvidia.com/gpu: 1, cpu: "4", memory: 16Gi}
@@ -196,11 +207,12 @@ nv-ingest:
   imagePullSecrets:
     - name: ngc-registry-default
   podLabels: {}                 # add kueue.x-k8s.io/queue-name here if Kueue is required
-  # ~55 Python processes (32 API workers + Ray actors). NVIDIA's default is a 24Gi request with no
-  # limit; at the memory limit Ray kills its own workers and ingestion hangs in PENDING.
+  # ~125 Python processes (32 gunicorn API workers hard-coded in the image entrypoint + ~50 Ray
+  # workers). NVIDIA's default is a 24Gi request with NO limit; near the limit Ray kills its own
+  # workers and ingestion hangs in PENDING. Request = NVIDIA's 24Gi, limit 32Gi for headroom.
   resources:
-    requests: {cpu: "2", memory: 16Gi}
-    limits:   {cpu: "8", memory: 24Gi}
+    requests: {cpu: "2", memory: 24Gi}
+    limits:   {cpu: "8", memory: 32Gi}
   envVars:
     COMPONENTS_TO_READY_CHECK: ""          # do not wait for the disabled extraction NIMs
     INSTALL_AUDIO_EXTRACTION_DEPS: "false" # avoid runtime package downloads

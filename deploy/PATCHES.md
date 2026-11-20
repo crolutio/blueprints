@@ -53,7 +53,7 @@ Not changed: the judge. `llm_judge_config` is already exposed in values
 
 | # | File | Change | Why | Enabled by |
 |---|---|---|---|---|
-| N1 | `charts/nemo-entity-store/templates/deployment.yaml` | `wait-for-postgres` init can use the entity-store image (Python TCP wait) instead of untagged `busybox` (that means `:latest` from docker.io); resources on both init containers | Pinned tags only, no docker.io, explicit requests/limits | `waitForPostgres.usePythonFromMainImage`, `waitForPostgres.resources`, `dbMigration.resources` |
+| N1 | `charts/nemo-entity-store/templates/deployment.yaml` | `wait-for-postgres` init can use the entity-store image (Python TCP wait) instead of untagged `busybox` (that means `:latest` from docker.io); resources on both init containers | Pinned tags only, no docker.io, explicit requests/limits. The Python script is a YAML double-quoted string so `\n` becomes real line breaks (an earlier single-quoted version failed with a SyntaxError and the pod never started; found by the local install test). | `waitForPostgres.usePythonFromMainImage`, `waitForPostgres.resources`, `dbMigration.resources` |
 | N2 | `charts/nemo-evaluator/templates/deployment.yaml` | Same for evaluator's `wait-for-postgres` (uses the pinned entity-store image) | Same | `waitForPostgres.image`, `.resources` |
 | N3 | `charts/nemo-evaluator/templates/_db_migration.tpl` | `securityContext` configurable (upstream hard-codes `runAsUser: 0`) | Root is rejected by restricted-v2 | `dbMigration.securityContext: {}` |
 | N4 | `charts/nemo-evaluator/templates/eval-factory-job-template.yaml` | Resources on both containers of the **runtime** evaluation Job | Evaluator creates these Jobs at runtime; without requests/limits they are rejected under a CPU/memory ResourceQuota | `evalJobResources`, `evalJobResultsHandlerResources` |
@@ -75,6 +75,7 @@ fine-tuning is off). They stay in the package, inactive, so fine-tuning could be
 | R1 | `Chart.yaml` | Removed dependencies zipkin, opentelemetry-collector, kube-prometheus-stack; version `v2.6.0-nvaie.2` | Disabled anyway; barebones; nothing extra to vendor | always |
 | R2 | `templates/deployment.yaml`, `ingestor-server-deployment.yaml` | Optional Kueue pod label | Kueue (off by default) | `kueue.queueName` |
 | R3 | `templates/llm-nim.yaml`, `embedding-nim.yaml` | Optional Kueue label on `NIMService` (`spec.labels`); optional `resources` on `NIMCache` (upstream: `{}`) | Kueue; explicit cpu/memory for the model-download job | `kueue.queueName`, `nimOperator.<nim>.cacheResources` |
+| R3b | `templates/embedding-nim.yaml` | Optional `model` (profile filter) on the embedding `NIMCache` | Upstream passes none, so the operator caches all 11 profiles of NIM 1.13.0 (~20 GB, more than the 20Gi volume). We cache only the L40S profile. | `nimOperator.nvidia-nim-llama-nemotron-embed-1b-v2.model` |
 | R4 | `values.yaml` | Default `kueue.queueName: ""` | | |
 | R5 | `charts/` | nv-ingest 26.3.0, seaweedfs 4.21.0, eck-elasticsearch 0.18.0 vendored as `.tgz` | Offline install (eck-elasticsearch is disabled by our values) | |
 | R6 | `templates/elasticsearch.yaml` (**new**) | Plain single-node Elasticsearch: Deployment + Service `rag-elasticsearch:9200` + 5Gi PVC; security off, `node.store.allow_mmap: false`, no fixed UID | Replaces the eck-elasticsearch subchart, which needs the ECK operator and its cluster-wide CRDs. Same settings as NVIDIA's Docker Compose deployment of this blueprint. Tested with ES 9.3.0 as a random UID with group 0 (restricted-v2 conditions): collection create, vector write, vector search, document listing all work. | `elasticsearch.enabled: true`, `eck-elasticsearch.enabled: false`, `APP_VECTORSTORE_URL` |
@@ -83,7 +84,17 @@ fine-tuning is off). They stay in the package, inactive, so fine-tuning could be
 Values-only changes for restricted-v2 (no template change): `TEMP_DIR=/tmp-data` for rag-server
 (its default `./tmp-data` sits under the root-owned `/workspace`; as a random UID every
 knowledge-base query failed with `Permission denied: './tmp-data'`), and nv-ingest memory raised to
-16Gi request / 24Gi limit (NVIDIA's default is a 24Gi request; at the limit Ray kills its own workers).
+24Gi request / 32Gi limit (NVIDIA's default is a 24Gi request with no limit; ~125 processes; at the limit
+Ray kills its own workers).
+
+NIM model profiles (values only), checked with NIM Operator 3.1.2 against the real NVIDIA manifests: the LLM
+filter sets every key (`engine: tensorrt_llm, precision: fp8, tensorParallelism: "1", lora: false,
+gpus: [{product: l40s}]`) because the chart's defaults (`engine: vllm, precision: fp8`) would otherwise be
+merged in and match no profile ("no profiles are selected for caching"). Result: exactly one profile each
+(LLM `ad17776f...` L40S TP1 fp8; embedding `b313b88d...` compute capability 8.9 fp16).
+
+Secret `ngc-api` (created by `deploy/scripts/preflight.sh`) holds the NGC key under both `NGC_API_KEY` (NIMs)
+and `NVIDIA_API_KEY` (rag-server reads this name; without it the pod stops with CreateContainerConfigError).
 
 ## 4. nv-ingest 26.3.0 subchart
 

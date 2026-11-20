@@ -129,10 +129,23 @@ for s in ngc-registry-default ngc-api; do
       oc create secret docker-registry ngc-registry-default -n "$NS" --docker-server=nvcr.io \
         --docker-username='$oauthtoken' --docker-password="$NGC_API_KEY" >/dev/null
     else
-      oc create secret generic ngc-api -n "$NS" --from-literal=NGC_API_KEY="$NGC_API_KEY" >/dev/null
+      # NIMs read NGC_API_KEY, rag-server reads NVIDIA_API_KEY (both the NGC key, as in NVIDIA's RAG guide)
+      oc create secret generic ngc-api -n "$NS" --from-literal=NGC_API_KEY="$NGC_API_KEY" \
+        --from-literal=NVIDIA_API_KEY="$NGC_API_KEY" >/dev/null
     fi && pass "secret $s created" || fail "could not create secret $s" "check permissions in $NS"
   fi
 done
+# ngc-api must hold BOTH keys; a secret made by an older version of this script has only NGC_API_KEY
+# (rag-server then stops with CreateContainerConfigError "couldn't find key NVIDIA_API_KEY").
+if oc get secret ngc-api -n "$NS" >/dev/null 2>&1; then
+  for k in NGC_API_KEY NVIDIA_API_KEY; do
+    if [ -n "$(oc get secret ngc-api -n "$NS" -o jsonpath="{.data.$k}" 2>/dev/null)" ]; then pass "secret ngc-api has key $k"
+    elif [ -n "${NGC_API_KEY:-}" ]; then
+      printf '%s' "$NGC_API_KEY" | oc set data secret/ngc-api -n "$NS" --from-file="$k"=/dev/stdin >/dev/null \
+        && pass "secret ngc-api: key $k added" || fail "could not add key $k to secret ngc-api" "check permissions in $NS"
+    else fail "secret ngc-api has no key $k" "export NGC_API_KEY (RUNBOOK 0.2) and run this script again; it adds the key"; fi
+  done
+fi
 oc secrets link default ngc-registry-default --for=pull -n "$NS" >/dev/null 2>&1 \
   && pass "default ServiceAccount can use ngc-registry-default" || warn "could not link the pull secret to the default ServiceAccount" "oc secrets link default ngc-registry-default --for=pull -n $NS"
 
@@ -178,7 +191,17 @@ EOF
   else
     out=$(oc logs "$pod" -n "$NS" 2>/dev/null)
     scc=$(oc get "$pod" -n "$NS" -o jsonpath='{.metadata.annotations.openshift\.io/scc}' 2>/dev/null)
+    waitr=$(oc get "$pod" -n "$NS" -o jsonpath='{.status.containerStatuses[0].state.waiting.reason}' 2>/dev/null)
+    pvcph=$(oc get pvc nvaie-rwtest -n "$NS" -o jsonpath='{.status.phase}' 2>/dev/null)
     if grep -q WRITE_OK <<<"$out"; then pass "new volume is writable by a non-root pod (SCC: ${scc:-unknown})"
+    elif [[ "$waitr" == ErrImagePull || "$waitr" == ImagePullBackOff ]]; then
+      fail "storage not tested: the test image $TEST_IMAGE could not be pulled" "not a storage problem: fix the image pull first (see the image pull check below), then run this script again"
+    elif [ "$pvcph" != Bound ]; then
+      fail "the 1Gi test volume was not provisioned (PVC $pvcph)" "send this output to the storage admin: StorageClass $SC did not create a volume"
+      oc describe pvc nvaie-rwtest -n "$NS" | tail -6 | sed 's/^/        /'
+    elif [ -z "$out" ]; then
+      fail "the test pod did not start within 4 minutes (state: ${waitr:-$(oc get "$pod" -n "$NS" -o jsonpath='{.status.phase}')})" "send this output to us"
+      oc describe "$pod" -n "$NS" | tail -8 | sed 's/^/        /'
     else
       if [ -n "$scc" ] && [ "$scc" != restricted-v2 ]; then
         fail "could not write to a new $SC volume under SCC '$scc'" "workloads in $NS get SCC '$scc' instead of restricted-v2; send this output to us"

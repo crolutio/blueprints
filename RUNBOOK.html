@@ -283,9 +283,9 @@ Troubleshooting</a></li>
 id="toc-5-not-verified-and-approvals-needed"><span class="num">5.</span> Not verified, and
 approvals needed</a>
 <ul>
-<li><a href="#51-not-verified-could-not-be-tested-without-the-cluster"
-id="toc-51-not-verified-could-not-be-tested-without-the-cluster"><span class="num">5.1</span> Not
-verified (could not be tested without the cluster)</a></li>
+<li><a href="#51-what-was-tested-before-the-day-and-what-was-not"
+id="toc-51-what-was-tested-before-the-day-and-what-was-not"><span class="num">5.1</span> What was
+tested before the day, and what was not</a></li>
 <li><a href="#52-needs-client-approval"
 id="toc-52-needs-client-approval"><span class="num">5.2</span> Needs client approval</a></li>
 </ul></li>
@@ -472,7 +472,10 @@ they are missing. It takes about 5-10 minutes.</p>
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">bash</span> deploy/scripts/preflight.sh <span class="dv">2</span><span class="op">&gt;&amp;</span><span class="dv">1</span> <span class="kw">|</span> <span class="fu">tee</span> preflight-<span class="va">$(</span><span class="fu">date</span> +%Y%m%d-%H%M<span class="va">)</span>.txt</span></code></pre></div>
 <p>What it changes, all inside <code>$NS</code>: creates the secrets
 <code>ngc-registry-default</code> and <code>ngc-api</code> (only if
-missing), links the pull secret to the <code>default</code>
+missing; <code>ngc-api</code> holds the NGC key twice, as
+<code>NGC_API_KEY</code> for the NIMs and <code>NVIDIA_API_KEY</code>
+for rag-server, and the script adds a missing key to an existing
+<code>ngc-api</code>), links the pull secret to the <code>default</code>
 ServiceAccount, and creates then deletes its own test objects (one 1Gi
 PVC + pod labelled <code>nvaie-test=rwtest</code>, one tiny pod per
 image labelled <code>pull-check=nvaie</code>). Nothing
@@ -512,8 +515,8 @@ the other):</p>
 </tr>
 <tr class="odd">
 <td>RAG (incl. both NIMs)</td>
-<td>~6.7 CPU / 54 GiB</td>
-<td>~32 CPU / 108 GiB</td>
+<td>~6.7 CPU / 62 GiB</td>
+<td>~32 CPU / 116 GiB</td>
 <td>2</td>
 </tr>
 </tbody>
@@ -747,11 +750,13 @@ deployments/outputs):
 <div class="sourceCode" id="cb19"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-sS</span> <span class="at">-X</span> DELETE http://localhost:8000/api/jobs/<span class="va">$JOB</span> <span class="kw">|</span> <span class="ex">jq</span> .</span></code></pre></div></li>
 <li>List NIMs created at runtime by NeMo (the judge stays up while the
-API runs). Delete only these:
+API runs) and their stored deployment configs. Delete only these
+(usually one NIMService, the judge, and no NIMCache):
 <div class="sourceCode" id="cb20"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get nimservice,nimcache <span class="at">-n</span> <span class="va">$NS</span></span>
-<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete nimservice <span class="at">-n</span> <span class="va">$NS</span> <span class="op">&lt;</span>names shown, e.g. modeldeployment-dfwbp-...<span class="op">&gt;</span></span>
-<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete nimcache   <span class="at">-n</span> <span class="va">$NS</span> <span class="op">&lt;</span>names shown<span class="op">&gt;</span></span></code></pre></div></li>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete nimservice <span class="at">-n</span> <span class="va">$NS</span> <span class="op">&lt;</span>names shown, e.g. modeldeployment-dfwbp-meta-llama-3-1-8b-instruct<span class="op">&gt;</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get cm <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-l</span> app.nvidia.com/config-type=modelDeployment</span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete cm <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-l</span> app.nvidia.com/config-type=modelDeployment</span></code></pre></div></li>
 <li>Stop the port-forwards (Ctrl-C in the second terminal), then remove
 the release:
 <div class="sourceCode" id="cb21"><pre
@@ -881,18 +886,23 @@ secrets: keep). List, then delete exactly these:
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get nimcache,nimservice,pvc,secret <span class="at">-n</span> <span class="va">$NS</span></span>
 <span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete nimcache <span class="at">-n</span> <span class="va">$NS</span> nim-llm-cache nemotron-embedding-ms-cache</span>
 <span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete secret <span class="at">-n</span> <span class="va">$NS</span> <span class="at">--ignore-not-found</span> rag-seaweedfs-s3-secret rag-seaweedfs-sftp-secret</span>
-<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pvc <span class="at">-n</span> <span class="va">$NS</span>            <span class="co"># then delete any remaining RAG PVC by name</span></span></code></pre></div></li>
-<li>Verify:
+<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pvc <span class="at">-n</span> <span class="va">$NS</span>            <span class="co"># then delete any remaining RAG PVC by name</span></span></code></pre></div>
+The NIM Operator also left its download account
+(<code>nim-cache-sa</code>, <code>nim-cache-role</code>,
+<code>nim-cache-rolebinding</code>). Remove it once no NIMCache is left:
 <div class="sourceCode" id="cb38"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get all,pvc,nimcache,nimservice,rolebinding <span class="at">-n</span> <span class="va">$NS</span></span></code></pre></div>
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete sa,role,rolebinding <span class="at">-n</span> <span class="va">$NS</span> nim-cache-sa nim-cache-role nim-cache-rolebinding <span class="at">--ignore-not-found</span></span></code></pre></div></li>
+<li>Verify:
+<div class="sourceCode" id="cb39"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get all,pvc,nimcache,nimservice,rolebinding <span class="at">-n</span> <span class="va">$NS</span></span></code></pre></div>
 Expected: no RAG objects left.</li>
 </ol>
 <hr />
 <h2 id="3-final-clean-up"><span class="num">3.</span> Final clean-up</h2>
 <p>Nothing cluster-wide was created, so only the two secrets remain.
 Delete them if the client wants the namespace empty (DESTRUCTIVE):</p>
-<div class="sourceCode" id="cb39"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete secret <span class="at">-n</span> <span class="va">$NS</span> ngc-registry-default ngc-api</span></code></pre></div>
+<div class="sourceCode" id="cb40"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete secret <span class="at">-n</span> <span class="va">$NS</span> ngc-registry-default ngc-api</span></code></pre></div>
 <hr />
 <h2 id="4-troubleshooting"><span class="num">4.</span> Troubleshooting</h2>
 <div class="table-wrap"><table>
@@ -918,6 +928,21 @@ an SCC decision (A7). Do not grant anyuid on your own.</td>
 <td>the anyuid RoleBinding (A5) is missing or was not allowed</td>
 <td><code>oc get rolebinding -n $NS rag-server-anyuid-scc</code>; a
 cluster-admin re-runs 2.2</td>
+</tr>
+<tr class="odd">
+<td><code>rag-server</code> <code>CreateContainerConfigError</code>,
+<code>couldn't find key NVIDIA_API_KEY in Secret ngc-api</code></td>
+<td><code>ngc-api</code> made by an older pre-flight has only
+<code>NGC_API_KEY</code></td>
+<td>export <code>NGC_API_KEY</code> and re-run the pre-flight (it adds
+the key); the pod starts by itself</td>
+</tr>
+<tr class="even">
+<td>NIMCache <code>NotReady</code>, message
+<code>no profiles are selected for caching</code></td>
+<td>the profile filter matches nothing in that NIM's manifest</td>
+<td><code>oc get cm -n $NS nim-llm-cache-manifest -o yaml</code> to see
+the profiles; send us the output</td>
 </tr>
 <tr class="odd">
 <td><code>ImagePullBackOff</code> on non-nvcr images</td>
@@ -992,50 +1017,45 @@ errors</td>
 <hr />
 <h2 id="5-not-verified-and-approvals-needed"><span class="num">5.</span> Not verified, and
 approvals needed</h2>
-<h3 id="51-not-verified-could-not-be-tested-without-the-cluster"><span class="num">5.1</span> Not
-verified (could not be tested without the cluster)</h3>
+<h3 id="51-what-was-tested-before-the-day-and-what-was-not"><span class="num">5.1</span> What was
+tested before the day, and what was not</h3>
+<p><strong>Tested end to end on a local Kubernetes 1.35 cluster</strong>
+(2026-11-20), running this runbook's commands as written: the
+pre-flight; the flywheel install, data load, one job,
+<code>flywheel-check.sh</code> (all PASS), evidence and uninstall; the
+RAG install, <code>rag-test.sh</code> (all PASS, including real
+ingestion through nv-ingest into Elasticsearch), evidence and uninstall.
+Conditions:</p>
+<ul>
+<li>admission rules that imitate OpenShift <code>restricted-v2</code>
+(random UID from the namespace range, group 0, fsGroup, no privilege
+escalation, fixed UIDs/fsGroups and root rejected), <code>nonroot</code>
+for the NIM pods and <code>anyuid</code> for <code>rag-nv-ingest</code>
+only. Every pod ran under them;</li>
+<li>the client's NIM Operator version (3.1.2), with
+deployment-management creating the flywheel NIMs through it;</li>
+<li>the real NIM model manifests: the operator selected exactly one L40S
+profile per RAG model.</li>
+</ul>
+<p><strong>Not tested</strong> (needs the client's cluster):</p>
 <ol type="1">
-<li><strong>8B NIM tag <code>1.8.3</code></strong>: chosen from NVIDIA's
-flywheel config and the NIM 1.8 support matrix; never started on this
-cluster's L40S.</li>
-<li><strong>Pulls from docker.io, registry.redhat.io</strong> (and the
-IDMS effect): the pre-flight (0.3) tests them.</li>
-<li><strong>restricted-v2 at runtime</strong>: static checks pass for
-every chart-rendered pod except <code>rag-nv-ingest</code> (anyuid, A5).
-Run locally under restricted-v2 conditions (random UID, group 0, no
-capabilities): Elasticsearch 9.3.0, redis, SeaweedFS, rag-server and
-ingestor-server, including document listing and a knowledge-base query.
-Not checkable offline: pods created at runtime by NeMo Evaluator (eval
-Jobs), deployment-management and the NIM Operator (NIM pods), the
-evaluator DB migration without root, Gitea/data-store without UID
-1000.</li>
-<li><strong>deployment-management 25.8 with the client's NIM Operator
-3.1.2</strong>: NeMo 25.8 bundles 2.0.2.</li>
-<li><strong>NIM placement</strong>: deployment-management cannot set a
-nodeSelector; NIMs take any free GPU (by decision).</li>
+<li>The models themselves: the NIM containers were replaced by a small
+fake (no GPU here), so model start-up on L40S, real downloads from NGC,
+GPU memory and answer quality are unverified. The 8B tag
+<code>1.8.3</code> and its L40S profile come from NVIDIA's
+manifest.</li>
+<li>Real OpenShift SCC admission (imitated, not the real one), Ceph RBD
+storage (the pre-flight write test checks it), the cluster's
+network/registry rules (the pre-flight pull test checks them).</li>
+<li>nv-ingest with its full 32 API workers (our test machine had too
+little memory; we ran it with 2). Requests/limits are set to 24Gi/32Gi
+from NVIDIA's own figure.</li>
 <li><strong>Kueue</strong> behaviour for runtime-created pods if
 <code>nvaie-test</code> is Kueue-managed (0.3.4).</li>
-<li><strong>nv-ingest ingestion end to end</strong> (it needs the
-embedding NIM and more memory than our test machine had). nv-ingest
-itself runs as in NVIDIA's OpenShift design (root via anyuid); only its
-memory was raised.</li>
-<li><strong>StorageClass name</strong>
-<code>ocs-storagecluster-ceph-rbd</code> (ODF default name), checked by
-the pre-flight (0.3), including the write test.</li>
-<li>The NIMCache profile filter
-<code>{tensorParallelism: "1", gpus: [{product: l40s}]}</code> for the
-8B tag.</li>
-<li>The UBI nginx gateway image in the cluster (pull checked by the
-pre-flight; function verified by 1.6's Evaluator query).</li>
 <li>Durations quoted (model downloads, job time) come from NVIDIA docs,
 not measured here.</li>
-<li>CPU/memory requests/limits of pods NeMo creates at runtime (flywheel
-NIMs + their cache Jobs). Our charts set them for every pod they render,
-and for the Evaluator's runtime Job template. Under a strict quota these
-runtime pods need a LimitRange (0.3.1).</li>
-<li>The flywheel image starting under a random UID with
-<code>UV_NO_SYNC=1</code> (upstream image runs as root and re-syncs at
-start; see <code>deploy/PATCHES.md</code> F7).</li>
+<li>CPU/memory of pods NeMo creates at runtime (flywheel NIMs): under a
+strict quota they need a LimitRange (0.3.1).</li>
 </ol>
 <h3 id="52-needs-client-approval"><span class="num">5.2</span> Needs client approval</h3>
 <p>See <strong>"Client approvals required"</strong> at the top of this

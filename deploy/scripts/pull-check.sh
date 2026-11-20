@@ -23,6 +23,8 @@ RAG_IMAGES=(
 )
 case "$WHAT" in flywheel) IMAGES=("${FLYWHEEL_IMAGES[@]}");; rag) IMAGES=("${RAG_IMAGES[@]}");; *) IMAGES=("${FLYWHEEL_IMAGES[@]}" "${RAG_IMAGES[@]}");; esac
 
+# leftovers of an earlier run must be gone first (same pod names)
+oc -n "$NS" delete pod -l pull-check=nvaie --wait=true --timeout=120s >/dev/null 2>&1
 i=0
 for img in "${IMAGES[@]}"; do
   i=$((i+1)); name="pull-check-$i"
@@ -53,7 +55,14 @@ done
 # the kubelet retries by itself. So keep waiting until the image is Pulled, or the error is a
 # permanent one (auth / not found / blocked), or 10 minutes pass.
 HARD='unauthorized|denied|forbidden|not found|manifest unknown|no such host|blocked'
-ev() { oc -n "$NS" get events --field-selector involvedObject.name="$1" -o jsonpath='{range .items[*]}{.reason}: {.message}{"\n"}{end}' 2>/dev/null; }
+# Events are matched by pod UID, not name: events from an earlier run (kept ~1 hour) of a pod with
+# the same name would otherwise be mixed in (e.g. an old "unauthorized" turning a good pull into FAILED).
+declare -A UID_OF
+ev() {
+  [ -n "${UID_OF[$1]:-}" ] || UID_OF[$1]=$(oc -n "$NS" get pod "$1" -o jsonpath='{.metadata.uid}' 2>/dev/null)
+  [ -n "${UID_OF[$1]}" ] || return 0
+  oc -n "$NS" get events --field-selector involvedObject.uid="${UID_OF[$1]}" -o jsonpath='{range .items[*]}{.reason}: {.message}{"\n"}{end}' 2>/dev/null
+}
 echo "Waiting up to 10 minutes for pulls (large images such as Elasticsearch take a few minutes)..."
 for _ in $(seq 1 ${PULL_ROUNDS:-60}); do
   pending=0

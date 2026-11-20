@@ -1,5 +1,5 @@
-diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/nemo-customizer/templates/finetuning/configmap.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-customizer/templates/finetuning/configmap.yaml
---- deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/nemo-customizer/templates/finetuning/configmap.yaml	2026-11-19 15:32:20.449837817 +0400
+diff -ruN deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/nemo-customizer/templates/finetuning/configmap.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-customizer/templates/finetuning/configmap.yaml
+--- deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/nemo-customizer/templates/finetuning/configmap.yaml	2026-11-19 15:32:20.449837817 +0400
 +++ deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-customizer/templates/finetuning/configmap.yaml	2026-11-19 15:32:24.333951565 +0400
 @@ -87,7 +87,12 @@
          hfSecretName: {{ .Values.hfAPISecret | toYaml }}
@@ -14,8 +14,8 @@ diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/ne
          ttlSecondsAfterFinished: {{ .Values.modelDownloader.ttlSecondsAfterFinished }}
  
        nemo_data_store_tools:
-diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/nemo-customizer/templates/finetuning/deployment.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-customizer/templates/finetuning/deployment.yaml
---- deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/nemo-customizer/templates/finetuning/deployment.yaml	2026-11-19 15:32:20.449853481 +0400
+diff -ruN deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/nemo-customizer/templates/finetuning/deployment.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-customizer/templates/finetuning/deployment.yaml
+--- deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/nemo-customizer/templates/finetuning/deployment.yaml	2026-11-19 15:32:20.449853481 +0400
 +++ deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-customizer/templates/finetuning/deployment.yaml	2026-11-19 15:32:20.589515323 +0400
 @@ -19,6 +19,11 @@
        - name: {{ .Chart.Name }}
@@ -29,8 +29,8 @@ diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/ne
          env:
            {{- include "validate.wandb" .}}
            {{- include "validate.openTelemetry" .}}
-diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/nemo-customizer/values.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-customizer/values.yaml
---- deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/nemo-customizer/values.yaml	2026-11-19 15:32:20.449766265 +0400
+diff -ruN deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/nemo-customizer/values.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-customizer/values.yaml
+--- deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/nemo-customizer/values.yaml	2026-11-19 15:32:20.449766265 +0400
 +++ deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-customizer/values.yaml	2026-11-19 15:32:24.364548868 +0400
 @@ -34,6 +34,8 @@
  # -- Download models to PVC model cache configuration.
@@ -48,8 +48,8 @@ diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/ne
 +
 +# PATCH(nvaie): resources for the customizer API container (upstream sets none)
 +apiResources: {}
-diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/nemo-datastore/templates/gitea/deployment.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-datastore/templates/gitea/deployment.yaml
---- deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/nemo-datastore/templates/gitea/deployment.yaml	2026-11-19 15:32:20.446409861 +0400
+diff -ruN deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/nemo-datastore/templates/gitea/deployment.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-datastore/templates/gitea/deployment.yaml
+--- deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/nemo-datastore/templates/gitea/deployment.yaml	2026-11-19 15:32:20.446409861 +0400
 +++ deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-datastore/templates/gitea/deployment.yaml	2026-11-19 15:32:24.301546404 +0400
 @@ -55,7 +55,12 @@
        imagePullSecrets:
@@ -84,8 +84,8 @@ diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/ne
              {{- $_ := set $csc "runAsUser" 1000 -}}
              {{- end -}}
              {{- toYaml $csc | nindent 12 }}
-diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/nemo-datastore/values.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-datastore/values.yaml
---- deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/nemo-datastore/values.yaml	2026-11-19 15:32:20.446266052 +0400
+diff -ruN deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/nemo-datastore/values.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-datastore/values.yaml
+--- deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/nemo-datastore/values.yaml	2026-11-19 15:32:20.446266052 +0400
 +++ deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-datastore/values.yaml	2026-11-19 15:32:20.589483915 +0400
 @@ -635,3 +635,6 @@
    ngcImagePullSecret: ngc-image-pull-secret
@@ -94,9 +94,9 @@ diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/ne
 +
 +# PATCH(nvaie): set to false so configure-datastore/configure-gpg do not force runAsUser 1000
 +configureDatastoreForceUid1000: true
-diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/nemo-entity-store/templates/deployment.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-entity-store/templates/deployment.yaml
---- deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/nemo-entity-store/templates/deployment.yaml	2026-11-19 15:32:20.455147472 +0400
-+++ deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-entity-store/templates/deployment.yaml	2026-11-19 15:32:20.589363547 +0400
+diff -ruN deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/nemo-entity-store/templates/deployment.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-entity-store/templates/deployment.yaml
+--- deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/nemo-entity-store/templates/deployment.yaml	2026-11-19 15:32:20.455147472 +0400
++++ deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-entity-store/templates/deployment.yaml	2026-11-20 12:53:38.360786374 +0400
 @@ -29,9 +29,18 @@
        securityContext:
          {{- toYaml .Values.podSecurityContext | nindent 8 }}
@@ -105,7 +105,7 @@ diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/ne
 +        {{- if .Values.waitForPostgres.usePythonFromMainImage }}
 +        - name: wait-for-postgres
 +          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-+          command: ['/app/.venv/bin/python3', '-c', 'import socket,time\nwhile True:\n  try:\n    socket.create_connection(("{{ include "entity-store.database.host" . }}", {{ include "entity-store.database.port" . }}), 3); break\n  except OSError:\n    print("Waiting for Postgres to start", flush=True); time.sleep(5)']
++          command: ["/app/.venv/bin/python3", "-c", "import socket,time\nwhile True:\n  try:\n    socket.create_connection(('{{ include "entity-store.database.host" . }}', {{ include "entity-store.database.port" . }}), 3); break\n  except OSError:\n    print('Waiting for Postgres to start', flush=True); time.sleep(5)"]
 +          resources:
 +            {{- toYaml .Values.waitForPostgres.resources | nindent 12 }}
 +        {{- else }}
@@ -128,8 +128,8 @@ diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/ne
        containers:
          - name: {{ .Chart.Name }}
            securityContext:
-diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/nemo-entity-store/values.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-entity-store/values.yaml
---- deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/nemo-entity-store/values.yaml	2026-11-19 15:32:20.455070240 +0400
+diff -ruN deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/nemo-entity-store/values.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-entity-store/values.yaml
+--- deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/nemo-entity-store/values.yaml	2026-11-19 15:32:20.455070240 +0400
 +++ deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-entity-store/values.yaml	2026-11-19 15:32:20.589363547 +0400
 @@ -188,3 +188,10 @@
    ngcImagePullSecret: nvcrimagepullsecret
@@ -142,8 +142,8 @@ diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/ne
 +  resources: {}
 +dbMigration:
 +  resources: {}
-diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/nemo-evaluator/templates/_db_migration.tpl deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-evaluator/templates/_db_migration.tpl
---- deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/nemo-evaluator/templates/_db_migration.tpl	2026-11-19 15:32:20.457919171 +0400
+diff -ruN deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/nemo-evaluator/templates/_db_migration.tpl deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-evaluator/templates/_db_migration.tpl
+--- deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/nemo-evaluator/templates/_db_migration.tpl	2026-11-19 15:32:20.457919171 +0400
 +++ deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-evaluator/templates/_db_migration.tpl	2026-11-19 15:32:20.589422347 +0400
 @@ -46,7 +46,12 @@
      - "-c"
@@ -158,9 +158,9 @@ diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/ne
    resources:
      {{- toYaml .Values.dbMigration.resources | nindent 4 }}
  {{- end }}
-diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/nemo-evaluator/templates/deployment.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-evaluator/templates/deployment.yaml
---- deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/nemo-evaluator/templates/deployment.yaml	2026-11-19 15:32:20.457950323 +0400
-+++ deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-evaluator/templates/deployment.yaml	2026-11-19 15:32:20.589395883 +0400
+diff -ruN deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/nemo-evaluator/templates/deployment.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-evaluator/templates/deployment.yaml
+--- deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/nemo-evaluator/templates/deployment.yaml	2026-11-19 15:32:20.457950323 +0400
++++ deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-evaluator/templates/deployment.yaml	2026-11-20 12:53:38.351069160 +0400
 @@ -30,10 +30,19 @@
          {{- toYaml .Values.podSecurityContext | nindent 8 }}
        initContainers:
@@ -169,7 +169,7 @@ diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/ne
 +        {{- if .Values.waitForPostgres.image }}
 +        - name: wait-for-postgres
 +          image: {{ .Values.waitForPostgres.image | quote }}
-+          command: ['/app/.venv/bin/python3', '-c', 'import socket,time\nwhile True:\n  try:\n    socket.create_connection(("{{ include "nemo-common.postgresql.host" . }}", {{ include "nemo-common.postgresql.port" . }}), 3); break\n  except OSError:\n    print("Waiting for Postgres to start", flush=True); time.sleep(5)']
++          command: ["/app/.venv/bin/python3", "-c", "import socket,time\nwhile True:\n  try:\n    socket.create_connection(('{{ include "nemo-common.postgresql.host" . }}', {{ include "nemo-common.postgresql.port" . }}), 3); break\n  except OSError:\n    print('Waiting for Postgres to start', flush=True); time.sleep(5)"]
 +          resources:
 +            {{- toYaml .Values.waitForPostgres.resources | nindent 12 }}
 +        {{- else }}
@@ -181,8 +181,8 @@ diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/ne
          {{- include "nemo-evaluator.dbMigration" . | nindent 8 }}
        containers:
          - name: {{ .Chart.Name }}
-diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/nemo-evaluator/templates/eval-factory-job-template.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-evaluator/templates/eval-factory-job-template.yaml
---- deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/nemo-evaluator/templates/eval-factory-job-template.yaml	2026-11-19 15:32:20.457975075 +0400
+diff -ruN deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/nemo-evaluator/templates/eval-factory-job-template.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-evaluator/templates/eval-factory-job-template.yaml
+--- deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/nemo-evaluator/templates/eval-factory-job-template.yaml	2026-11-19 15:32:20.457975075 +0400
 +++ deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-evaluator/templates/eval-factory-job-template.yaml	2026-11-19 15:33:31.020675648 +0400
 @@ -27,6 +27,10 @@
            containers:
@@ -206,8 +206,8 @@ diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/ne
              command: results-handler-placeholder-command
              env:
                - name: NAMESPACE
-diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/nemo-evaluator/values.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-evaluator/values.yaml
---- deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/nemo-evaluator/values.yaml	2026-11-19 15:32:20.457882723 +0400
+diff -ruN deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/nemo-evaluator/values.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-evaluator/values.yaml
+--- deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/nemo-evaluator/values.yaml	2026-11-19 15:32:20.457882723 +0400
 +++ deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-evaluator/values.yaml	2026-11-19 15:33:31.020675648 +0400
 @@ -344,3 +344,12 @@
            dir: /var/lib/milvus/etcd
@@ -222,8 +222,8 @@ diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/ne
 +# PATCH(nvaie): resources for the runtime eval-factory Job containers (upstream: none)
 +evalJobResources: {}
 +evalJobResultsHandlerResources: {}
-diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/nemo-operator/templates/deployment.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-operator/templates/deployment.yaml
---- deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/nemo-operator/templates/deployment.yaml	2026-11-19 15:32:20.454507951 +0400
+diff -ruN deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/nemo-operator/templates/deployment.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-operator/templates/deployment.yaml
+--- deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/nemo-operator/templates/deployment.yaml	2026-11-19 15:32:20.454507951 +0400
 +++ deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-operator/templates/deployment.yaml	2026-11-19 15:33:31.020533936 +0400
 @@ -25,6 +25,8 @@
          kubectl.kubernetes.io/default-container: manager
@@ -242,8 +242,8 @@ diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/ne
        - args:
          {{- range .Values.controllerManager.manager.args }}
            - {{ . }}
-diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/nemo-operator/templates/proxy-rbac.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-operator/templates/proxy-rbac.yaml
---- deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/nemo-operator/templates/proxy-rbac.yaml	2026-11-19 15:32:20.454605151 +0400
+diff -ruN deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/nemo-operator/templates/proxy-rbac.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-operator/templates/proxy-rbac.yaml
+--- deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/nemo-operator/templates/proxy-rbac.yaml	2026-11-19 15:32:20.454605151 +0400
 +++ deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/nemo-operator/templates/proxy-rbac.yaml	2026-11-19 15:33:31.020585824 +0400
 @@ -1,3 +1,5 @@
 +{{- /* PATCH(nvaie): only needed by the kube-rbac-proxy sidecar */}}
@@ -259,8 +259,8 @@ diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/ne
 \ No newline at end of file
 +  namespace: '{{ .Release.Namespace }}'
 +{{- end }}
-diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/volcano/templates/admission.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/volcano/templates/admission.yaml
---- deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/volcano/templates/admission.yaml	2026-11-19 15:32:20.465934910 +0400
+diff -ruN deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/volcano/templates/admission.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/volcano/templates/admission.yaml
+--- deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/volcano/templates/admission.yaml	2026-11-19 15:32:20.465934910 +0400
 +++ deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/volcano/templates/admission.yaml	2026-11-19 15:32:29.589835426 +0400
 @@ -101,7 +101,9 @@
            {{- toYaml $admission_sc | nindent 8 }}
@@ -282,8 +282,8 @@ diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/vo
        {{- if .Values.basic.image_pull_secret }}
        imagePullSecrets:
          - name: {{ .Values.basic.image_pull_secret }}
-diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/volcano/templates/controllers.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/volcano/templates/controllers.yaml
---- deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/volcano/templates/controllers.yaml	2026-11-19 15:32:20.465969918 +0400
+diff -ruN deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/volcano/templates/controllers.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/volcano/templates/controllers.yaml
+--- deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/volcano/templates/controllers.yaml	2026-11-19 15:32:20.465969918 +0400
 +++ deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/volcano/templates/controllers.yaml	2026-11-19 15:32:29.611090493 +0400
 @@ -128,7 +128,9 @@
          {{- toYaml $controller_sc | nindent 8 }}
@@ -295,8 +295,8 @@ diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/vo
        {{- if .Values.basic.image_pull_secret }}
        imagePullSecrets:
            - name: {{ .Values.basic.image_pull_secret }}
-diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/volcano/templates/scheduler.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/volcano/templates/scheduler.yaml
---- deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/volcano/templates/scheduler.yaml	2026-11-19 15:32:20.466045294 +0400
+diff -ruN deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/volcano/templates/scheduler.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/volcano/templates/scheduler.yaml
+--- deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/volcano/templates/scheduler.yaml	2026-11-19 15:32:20.466045294 +0400
 +++ deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/volcano/templates/scheduler.yaml	2026-11-19 15:32:29.637318527 +0400
 @@ -138,7 +138,9 @@
          {{- toYaml $scheduler_sc | nindent 8 }}
@@ -321,8 +321,8 @@ diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/vo
  ---
  apiVersion: v1
  kind: Service
-diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/volcano/templates/webhooks.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/volcano/templates/webhooks.yaml
---- deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/volcano/templates/webhooks.yaml	2026-11-19 15:32:20.466080558 +0400
+diff -ruN deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/volcano/templates/webhooks.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/volcano/templates/webhooks.yaml
+--- deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/volcano/templates/webhooks.yaml	2026-11-19 15:32:20.466080558 +0400
 +++ deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/volcano/templates/webhooks.yaml	2026-11-19 15:32:29.589770946 +0400
 @@ -19,15 +19,32 @@
      name: mutatepod.volcano.sh
@@ -555,8 +555,8 @@ diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/vo
      rules:
        - apiGroups:
            - scheduling.volcano.sh
-diff -ruN deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/volcano/values.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/volcano/values.yaml
---- deploy/flywheel/.orig/nemo-microservices-helm-chart-pristine/charts/volcano/values.yaml	2026-11-19 15:32:20.465890222 +0400
+diff -ruN deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/volcano/values.yaml deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/volcano/values.yaml
+--- deploy/flywheel/orig/nemo-microservices-helm-chart-pristine/charts/volcano/values.yaml	2026-11-19 15:32:20.465890222 +0400
 +++ deploy/flywheel/chart/charts/nemo-microservices-helm-chart/charts/volcano/values.yaml	2026-11-19 15:32:29.589855698 +0400
 @@ -10,6 +10,9 @@
    image_tag_version: "v1.9.0"
