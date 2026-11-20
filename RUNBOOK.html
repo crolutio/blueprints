@@ -279,16 +279,6 @@ saved)</a></li>
 clean-up</a></li>
 <li><a href="#4-troubleshooting" id="toc-4-troubleshooting"><span class="num">4.</span>
 Troubleshooting</a></li>
-<li><a href="#5-not-verified-and-approvals-needed"
-id="toc-5-not-verified-and-approvals-needed"><span class="num">5.</span> Not verified, and
-approvals needed</a>
-<ul>
-<li><a href="#51-what-was-tested-before-the-day-and-what-was-not"
-id="toc-51-what-was-tested-before-the-day-and-what-was-not"><span class="num">5.1</span> What was
-tested before the day, and what was not</a></li>
-<li><a href="#52-needs-client-approval"
-id="toc-52-needs-client-approval"><span class="num">5.2</span> Needs client approval</a></li>
-</ul></li>
 </ul></li>
 </ul>
 </nav>
@@ -1014,52 +1004,6 @@ errors</td>
 </tr>
 </tbody>
 </table></div>
-<hr />
-<h2 id="5-not-verified-and-approvals-needed"><span class="num">5.</span> Not verified, and
-approvals needed</h2>
-<h3 id="51-what-was-tested-before-the-day-and-what-was-not"><span class="num">5.1</span> What was
-tested before the day, and what was not</h3>
-<p><strong>Tested end to end on a local Kubernetes 1.35 cluster</strong>
-(2026-11-20), running this runbook's commands as written: the
-pre-flight; the flywheel install, data load, one job,
-<code>flywheel-check.sh</code> (all PASS), evidence and uninstall; the
-RAG install, <code>rag-test.sh</code> (all PASS, including real
-ingestion through nv-ingest into Elasticsearch), evidence and uninstall.
-Conditions:</p>
-<ul>
-<li>admission rules that imitate OpenShift <code>restricted-v2</code>
-(random UID from the namespace range, group 0, fsGroup, no privilege
-escalation, fixed UIDs/fsGroups and root rejected), <code>nonroot</code>
-for the NIM pods and <code>anyuid</code> for <code>rag-nv-ingest</code>
-only. Every pod ran under them;</li>
-<li>the client's NIM Operator version (3.1.2), with
-deployment-management creating the flywheel NIMs through it;</li>
-<li>the real NIM model manifests: the operator selected exactly one L40S
-profile per RAG model.</li>
-</ul>
-<p><strong>Not tested</strong> (needs the client's cluster):</p>
-<ol type="1">
-<li>The models themselves: the NIM containers were replaced by a small
-fake (no GPU here), so model start-up on L40S, real downloads from NGC,
-GPU memory and answer quality are unverified. The 8B tag
-<code>1.8.3</code> and its L40S profile come from NVIDIA's
-manifest.</li>
-<li>Real OpenShift SCC admission (imitated, not the real one), Ceph RBD
-storage (the pre-flight write test checks it), the cluster's
-network/registry rules (the pre-flight pull test checks them).</li>
-<li>nv-ingest with its full 32 API workers (our test machine had too
-little memory; we ran it with 2). Requests/limits are set to 24Gi/32Gi
-from NVIDIA's own figure.</li>
-<li><strong>Kueue</strong> behaviour for runtime-created pods if
-<code>nvaie-test</code> is Kueue-managed (0.3.4).</li>
-<li>Durations quoted (model downloads, job time) come from NVIDIA docs,
-not measured here.</li>
-<li>CPU/memory of pods NeMo creates at runtime (flywheel NIMs): under a
-strict quota they need a LimitRange (0.3.1).</li>
-</ol>
-<h3 id="52-needs-client-approval"><span class="num">5.2</span> Needs client approval</h3>
-<p>See <strong>"Client approvals required"</strong> at the top of this
-runbook (A5, A6, A7, A8).</p>
 </main>
 </div>
 <script>
