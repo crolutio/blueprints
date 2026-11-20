@@ -1,0 +1,46 @@
+# nv-ingest 26.3.0 (the version RAG Blueprint 2.6 uses), changed only so it runs as a NON-ROOT user.
+#
+# Why: NVIDIA's image runs as root and its Python interpreter lives under /root (mode 700), so it
+# cannot start as any other user. NVIDIA fixed this in later releases (Python under /opt/uv, non-root
+# user), but no released nv-ingest image that RAG 2.6 can use has the fix.
+#
+# What changes (nothing else in NVIDIA's image is touched):
+#   1. the uv-managed Python (and uv itself) move from /root to /opt/uv, the same place NVIDIA's later
+#      releases use, and the virtualenv's links and pyvenv.cfg point there;
+#   2. /workspace and the home/cache directory belong to group 0 and are group-writable, the standard
+#      OpenShift pattern: restricted-v2 runs the pod as a random UID that is always in group 0;
+#   3. all Python code is precompiled to bytecode (.pyc). NVIDIA's image ships almost none (none for
+#      Ray); as root Python writes them on first use, but a non-root user cannot, so every Ray
+#      process would compile thousands of files at start-up and Ray's 15 s start-up check fails;
+#   4. the image declares a non-root user (1001). OpenShift replaces it with the namespace's random UID.
+#
+# Build: see README.md next to this file.
+ARG BASE=nvcr.io/nvidia/nemo-microservices/nv-ingest:26.3.0
+FROM ${BASE}
+
+USER 0
+RUN set -eux; \
+    mkdir -p /opt/uv/bin; \
+    mv /root/.local/share/uv/python /opt/uv/python; \
+    ln -sfn /opt/uv/python/cpython-3.12.13-linux-x86_64-gnu /opt/uv/python/cpython-3.12-linux-x86_64-gnu; \
+    ln -sfn /opt/uv/python/cpython-3.12-linux-x86_64-gnu/bin/python3.12 /opt/nv_ingest_runtime/bin/python; \
+    sed -i 's#^home = .*#home = /opt/uv/python/cpython-3.12-linux-x86_64-gnu/bin#' /opt/nv_ingest_runtime/pyvenv.cfg; \
+    mv /root/.local/bin/uv /root/.local/bin/uvx /opt/uv/bin/; \
+    rm -rf /root/.local /root/.cache; \
+    mkdir -p /home/nvingest/.cache; \
+    chgrp -R 0 /workspace /home/nvingest; \
+    chmod -R g=u /workspace /home/nvingest; \
+    chmod -R a+rX /opt/uv; \
+    /opt/nv_ingest_runtime/bin/python -c 'import sys, nv_ingest; print("python ok", sys.version.split()[0])'
+
+# Precompile (a few files in test/example folders have syntax Python 3.12 rejects: ignored, never imported).
+RUN /opt/nv_ingest_runtime/bin/python -m compileall -q -j 0 \
+        /opt/nv_ingest_runtime/lib/python3.12/site-packages /opt/uv/python /workspace >/dev/null 2>&1 || true; \
+    n=$(find /opt/nv_ingest_runtime/lib/python3.12/site-packages/ray -name '*.pyc' | wc -l); \
+    echo "ray bytecode files: $n"; test "$n" -gt 1000
+
+ENV PATH=/opt/nv_ingest_runtime/bin:/opt/uv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    HOME=/home/nvingest \
+    XDG_CACHE_HOME=/home/nvingest/.cache
+
+USER 1001

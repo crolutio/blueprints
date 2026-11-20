@@ -257,21 +257,24 @@ saved)</a></li>
 id="toc-2-rag-blueprint-2-x-l40s"><span class="num">2.</span> RAG Blueprint (2 x L40S)</a>
 <ul>
 <li><a href="#21-gpu-check" id="toc-21-gpu-check"><span class="num">2.1</span> GPU check</a></li>
-<li><a href="#22-install-nvidia-openshift-overlay--our-overrides"
-id="toc-22-install-nvidia-openshift-overlay--our-overrides"><span class="num">2.2</span> Install
+<li><a href="#22-build-the-non-root-nv-ingest-image-once-approval-a5"
+id="toc-22-build-the-non-root-nv-ingest-image-once-approval-a5"><span class="num">2.2</span>
+Build the non-root nv-ingest image (once, approval A5)</a></li>
+<li><a href="#23-install-nvidia-openshift-overlay--our-overrides"
+id="toc-23-install-nvidia-openshift-overlay--our-overrides"><span class="num">2.3</span> Install
 (NVIDIA OpenShift overlay + our overrides)</a></li>
-<li><a href="#23-wait-for-everything-to-run"
-id="toc-23-wait-for-everything-to-run"><span class="num">2.3</span> Wait for everything to
+<li><a href="#24-wait-for-everything-to-run"
+id="toc-24-wait-for-everything-to-run"><span class="num">2.4</span> Wait for everything to
 run</a></li>
-<li><a href="#24-ingest-a-sample-text-document-and-ask-a-question"
-id="toc-24-ingest-a-sample-text-document-and-ask-a-question"><span class="num">2.4</span> Ingest
+<li><a href="#25-ingest-a-sample-text-document-and-ask-a-question"
+id="toc-25-ingest-a-sample-text-document-and-ask-a-question"><span class="num">2.5</span> Ingest
 a sample text document and ask a question</a></li>
-<li><a href="#25-success-check-and-evidence"
-id="toc-25-success-check-and-evidence"><span class="num">2.5</span> Success check and
+<li><a href="#26-success-check-and-evidence"
+id="toc-26-success-check-and-evidence"><span class="num">2.6</span> Success check and
 evidence</a></li>
 <li><a
-href="#26-uninstall-rag-and-clean-up-destructive-after-evidence-is-saved"
-id="toc-26-uninstall-rag-and-clean-up-destructive-after-evidence-is-saved"><span class="num">2.6</span>
+href="#27-uninstall-rag-and-clean-up-destructive-after-evidence-is-saved"
+id="toc-27-uninstall-rag-and-clean-up-destructive-after-evidence-is-saved"><span class="num">2.7</span>
 Uninstall RAG and clean up (<span class="flag danger">DESTRUCTIVE</span>, after evidence is
 saved)</a></li>
 </ul></li>
@@ -325,7 +328,10 @@ including end-to-end functional validation.</td>
 is installed and nothing cluster-wide is created</strong> (no CRDs,
 ClusterRoles or webhooks): both releases contain only objects inside
 <code>nvaie-test</code>. The only operator used is the NVIDIA NIM
-Operator the client already runs.</p>
+Operator the client already runs. <strong>Nothing runs as root</strong>
+and no extra SCC is requested: every pod runs under the default
+<code>restricted-v2</code>, except the NIM pods, which the NIM Operator
+runs under <code>nonroot</code> (UID 1000).</p>
 </blockquote>
 <h2 id="client-approvals-required-before-the-day">Client approvals
 required (before the day)</h2>
@@ -346,16 +352,17 @@ need explicit client approval. Exact object lists:
 <tbody>
 <tr class="odd">
 <td>A5</td>
-<td><strong><code>anyuid</code> SCC for one ServiceAccount</strong>
-(namespaced RoleBinding)</td>
+<td><strong>One OpenShift image build</strong> in
+<code>nvaie-test</code> (BuildConfig + ImageStream, Docker
+strategy)</td>
 <td>RAG</td>
-<td>Lets <strong>only</strong> <code>rag-nv-ingest</code> run as its
-image's user (root). NVIDIA's chart grants it to 7 ServiceAccounts,
-including <code>default</code>; we cut that to this one. Every other pod
-runs under <code>restricted-v2</code>.</td>
-<td>nv-ingest's Python interpreter lives under <code>/root</code> (mode
-700), so it cannot start as any other user</td>
-<td>RAG ingestion cannot run</td>
+<td>Builds our non-root version of NVIDIA's nv-ingest 26.3.0 image into
+the internal registry (2.2). Runs once, before the RAG install.</td>
+<td>NVIDIA's nv-ingest image can only run as root; nothing may run as
+root on this cluster</td>
+<td>Plan B: we build it on a workstation and push it to a registry of
+the client's choice
+(<code>deploy/images/nv-ingest-nonroot/README.md</code>)</td>
 </tr>
 <tr class="even">
 <td>A6</td>
@@ -371,7 +378,8 @@ Elasticsearch), registry.redhat.io (nginx proxy)</td>
 <td><strong>Possible SCC exceptions at runtime</strong></td>
 <td>Flywheel</td>
 <td>Decided case by case if a pod created at runtime (NIM, evaluation
-Job) is rejected for asking for a fixed user</td>
+Job) is rejected for asking for a fixed (non-root) user. Root is never
+requested.</td>
 <td>Cannot be checked before the run</td>
 <td>That step fails</td>
 </tr>
@@ -407,6 +415,7 @@ list first; delete only what the list shows.</li>
 deploy/packages/                our two patched charts (installed from these files) + SHA256SUMS
 deploy/flywheel/                values-nvaie.yaml, data/
 deploy/rag/                     values-nvaie.yaml, sample/nvaie-validation-note.txt
+deploy/images/nv-ingest-nonroot/  Containerfile + buildconfig.yaml: the non-root nv-ingest image (2.2)
 deploy/scripts/                 preflight.sh, gpu-free.sh, pull-check.sh,
                                 flywheel-check.sh, rag-test.sh, evidence.sh
 deploy/reports/                 offline renders + analysis (GPU, images, PVCs, cluster-scoped, SCC)
@@ -445,9 +454,9 @@ deploy/PATCHES.md               every change made to the upstream charts, and wh
 <p>The pre-flight script (0.3) checks all of these.</p>
 <h3 id="02-log-in-and-set-variables"><span class="num">0.2</span> Log in and set variables</h3>
 <p>The account needs admin rights in <code>nvaie-test</code> only
-(nothing cluster-wide is created). For the RAG install it must also be
-allowed to grant the <code>anyuid</code> SCC (approval A5); the
-pre-flight checks both.</p>
+(nothing cluster-wide is created). For RAG it must also be allowed to
+run one OpenShift Docker build there (approval A5); the pre-flight
+checks both.</p>
 <div class="sourceCode" id="cb2"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> login <span class="at">--server</span><span class="op">=</span>https://api.<span class="op">&lt;</span>cluster-domain<span class="op">&gt;</span>:6443      <span class="co"># as provided by the client</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">NS</span><span class="op">=</span>nvaie-test</span>
@@ -509,6 +518,12 @@ the other):</p>
 <td>~32 CPU / 116 GiB</td>
 <td>2</td>
 </tr>
+<tr class="even">
+<td>RAG image build (once, before the install; ~5 GB download)</td>
+<td>1 CPU / 4 GiB</td>
+<td>4 CPU / 8 GiB</td>
+<td>0</td>
+</tr>
 </tbody>
 </table></div>
 <p>If a quota requires CPU/memory requests and limits on
@@ -521,8 +536,9 @@ to add one.</p>
 <code>sed</code> command that puts the right name into the values files.
 Run it, then run the script again. If the namespace is not
 <code>nvaie-test</code>, also run
-<code>sed -i "s/nvaie-test/$NS/g" deploy/flywheel/values-nvaie.yaml</code>
-(it is used for RBAC scoping).</p>
+<code>sed -i "s/nvaie-test/$NS/g" deploy/flywheel/values-nvaie.yaml deploy/rag/values-nvaie.yaml</code>
+(RBAC scoping, and the address of the nv-ingest image in the internal
+registry).</p>
 <p><strong>0.3.3 Operators.</strong> Only the NIM Operator matters (both
 blueprints start their models through it). It must be version 3.0.2 or
 newer; the client runs 3.1.2.</p>
@@ -538,9 +554,12 @@ client must exempt <code>nvaie-test</code> for the test.</li>
 </ul>
 <p><strong>0.3.5 PID limit.</strong> Recorded only. NVIDIA's OpenShift
 overlay already handles low limits.</p>
-<p><strong>anyuid (RAG only).</strong> A <code>WARN</code> here does not
-block the flywheel. Before the RAG install a cluster-admin must approve
-A5 (and may have to run the RAG install, 2.2).</p>
+<p><strong>Image build (RAG only).</strong> A <code>WARN</code> about
+builds, ImageStreams or the internal registry does not block the
+flywheel. Before RAG, the client must allow the build (A5), or we use
+plan B (see A5). A <code>WARN</code> that the RAG values do not point to
+the internal registry: the namespace is not <code>nvaie-test</code>, run
+the <code>sed</code> in 0.3.2.</p>
 <p><strong>Storage write test fails.</strong> The charts set no fixed
 UID/GID/fsGroup; OpenShift's restricted-v2 SCC assigns an fsGroup from
 the namespace range, and that is what makes new volumes writable. If a
@@ -780,29 +799,41 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb25-1"><a href=
 <p class="stop-note"><strong class="flag stop">STOP</strong> unless it says
 <code>RAG (needs 2 x L40S): OK</code>. Both NIMs are pinned to
 <code>NVIDIA-L40S</code>.</p>
-<h3 id="22-install-nvidia-openshift-overlay--our-overrides"><span class="num">2.2</span> Install
-(NVIDIA OpenShift overlay + our overrides)</h3>
-<p>Needs approval A5: the release contains one RoleBinding that gives
-the <code>anyuid</code> SCC to the <code>rag-nv-ingest</code>
-ServiceAccount only. If the pre-flight warned that you cannot grant
-anyuid, a cluster-admin runs this step.</p>
+<h3 id="22-build-the-non-root-nv-ingest-image-once-approval-a5"><span class="num">2.2</span>
+Build the non-root nv-ingest image (once, approval A5)</h3>
+<p>NVIDIA's nv-ingest image can only run as root. This builds our
+version (NVIDIA's image with Python moved out of <code>/root</code>, see
+<code>deploy/images/nv-ingest-nonroot/README.md</code>) inside
+<code>$NS</code>, into the internal registry.</p>
 <div class="sourceCode" id="cb26"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">RAG_PKG</span><span class="op">=</span>deploy/packages/nvidia-blueprint-rag-v2.6.0-nvaie.2.tgz</span>
-<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="fu">tar</span> xzf <span class="va">$RAG_PKG</span> <span class="at">-C</span> /tmp nvidia-blueprint-rag/values-openshift.yaml</span>
-<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a><span class="ex">helm</span> upgrade <span class="at">--install</span> rag <span class="va">$RAG_PKG</span> <span class="at">-n</span> <span class="va">$NS</span> <span class="dt">\</span></span>
-<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">-f</span> /tmp/nvidia-blueprint-rag/values-openshift.yaml <span class="at">-f</span> deploy/rag/values-nvaie.yaml <span class="at">--timeout</span> 15m</span></code></pre></div>
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> apply <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-f</span> deploy/images/nv-ingest-nonroot/buildconfig.yaml</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> start-build nv-ingest-nonroot <span class="at">-n</span> <span class="va">$NS</span> <span class="at">--from-dir</span><span class="op">=</span>deploy/images/nv-ingest-nonroot <span class="at">--follow</span> <span class="at">--wait</span></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get istag nv-ingest-nonroot:26.3.0 <span class="at">-n</span> <span class="va">$NS</span></span></code></pre></div>
+<p>Expected (10-15 minutes, it downloads ~5 GB from nvcr.io): the build
+log ends with <code>python ok 3.12.13</code>,
+<code>ray bytecode files: 2362</code> and <code>Push successful</code>;
+the last command lists the image. <strong class="flag stop">STOP</strong> if the build
+fails: send us
+<code>oc logs -n $NS build/nv-ingest-nonroot-1</code>.</p>
+<h3 id="23-install-nvidia-openshift-overlay--our-overrides"><span class="num">2.3</span> Install
+(NVIDIA OpenShift overlay + our overrides)</h3>
+<div class="sourceCode" id="cb27"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">RAG_PKG</span><span class="op">=</span>deploy/packages/nvidia-blueprint-rag-v2.6.0-nvaie.3.tgz</span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a><span class="fu">tar</span> xzf <span class="va">$RAG_PKG</span> <span class="at">-C</span> /tmp nvidia-blueprint-rag/values-openshift.yaml</span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a><span class="ex">helm</span> upgrade <span class="at">--install</span> rag <span class="va">$RAG_PKG</span> <span class="at">-n</span> <span class="va">$NS</span> <span class="dt">\</span></span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">-f</span> /tmp/nvidia-blueprint-rag/values-openshift.yaml <span class="at">-f</span> deploy/rag/values-nvaie.yaml <span class="at">--timeout</span> 15m</span></code></pre></div>
 <p>Expected: <code>STATUS: deployed</code>. (No <code>--wait</code>: the
 NIMs take 20-60 minutes on first start.)</p>
 <p>Right after the install, as NVIDIA's OpenShift guide requires (the
 NIM Operator creates <code>nim-cache-sa</code>):</p>
-<div class="sourceCode" id="cb27"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sleep</span> 30<span class="kw">;</span> <span class="ex">oc</span> secrets link nim-cache-sa ngc-registry-default <span class="at">--for</span><span class="op">=</span>pull <span class="at">-n</span> <span class="va">$NS</span></span>
-<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete pod <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-l</span> app.nvidia.com/nim-cache <span class="at">--ignore-not-found</span>   <span class="co"># only if they were in ImagePullBackOff</span></span></code></pre></div>
-<h3 id="23-wait-for-everything-to-run"><span class="num">2.3</span> Wait for everything to
-run</h3>
 <div class="sourceCode" id="cb28"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get nimcache,nimservice <span class="at">-n</span> <span class="va">$NS</span></span>
-<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pods <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-o</span> wide</span></code></pre></div>
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sleep</span> 30<span class="kw">;</span> <span class="ex">oc</span> secrets link nim-cache-sa ngc-registry-default <span class="at">--for</span><span class="op">=</span>pull <span class="at">-n</span> <span class="va">$NS</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete pod <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-l</span> app.nvidia.com/nim-cache <span class="at">--ignore-not-found</span>   <span class="co"># only if they were in ImagePullBackOff</span></span></code></pre></div>
+<h3 id="24-wait-for-everything-to-run"><span class="num">2.4</span> Wait for everything to
+run</h3>
+<div class="sourceCode" id="cb29"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get nimcache,nimservice <span class="at">-n</span> <span class="va">$NS</span></span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pods <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-o</span> wide</span></code></pre></div>
 <p>Expected (after 20-60 minutes):</p>
 <pre><code>nimcache  nemotron-embedding-ms-cache   Ready
 nimcache  nim-llm-cache                 Ready
@@ -818,26 +849,26 @@ rag-redis-master-0                       1/1 Running
 rag-seaweedfs-all-in-one-...             1/1 Running
 rag-server-...                           1/1 Running</code></pre>
 <p>Elasticsearch is a plain Deployment (no ECK operator). Check it:</p>
-<div class="sourceCode" id="cb30"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> exec <span class="at">-n</span> <span class="va">$NS</span> deploy/rag-elasticsearch <span class="at">--</span> curl <span class="at">-s</span> localhost:9200/_cluster/health</span></code></pre></div>
+<div class="sourceCode" id="cb31"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> exec <span class="at">-n</span> <span class="va">$NS</span> deploy/rag-elasticsearch <span class="at">--</span> curl <span class="at">-s</span> localhost:9200/_cluster/health</span></code></pre></div>
 <p>Expected: <code>"status":"green"</code> (or <code>yellow</code>).
 Confirm which SCC each pod got and that the GPU count is exactly 2:</p>
-<div class="sourceCode" id="cb31"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pods <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-o</span> custom-columns=POD:.metadata.name,SCC:.metadata.annotations.openshift\\.io/scc</span>
-<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pods <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-o</span> json <span class="kw">|</span> <span class="ex">jq</span> <span class="st">&#39;[.items[] | select(.status.phase==&quot;Running&quot;) | .spec.containers[].resources.limits[&quot;nvidia.com/gpu&quot;] // empty | tonumber] | add&#39;</span></span></code></pre></div>
-<p>Expected: <code>anyuid</code> only for
-<code>rag-nv-ingest-...</code>, <code>nonroot</code> for the NIM pods,
-<code>restricted-v2</code> for the rest; GPU count <code>2</code>.</p>
-<h3 id="24-ingest-a-sample-text-document-and-ask-a-question"><span class="num">2.4</span> Ingest
+<div class="sourceCode" id="cb32"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pods <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-o</span> custom-columns=POD:.metadata.name,SCC:.metadata.annotations.openshift\\.io/scc</span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pods <span class="at">-n</span> <span class="va">$NS</span> <span class="at">-o</span> json <span class="kw">|</span> <span class="ex">jq</span> <span class="st">&#39;[.items[] | select(.status.phase==&quot;Running&quot;) | .spec.containers[].resources.limits[&quot;nvidia.com/gpu&quot;] // empty | tonumber] | add&#39;</span></span></code></pre></div>
+<p>Expected: <code>nonroot</code> for the two NIM pods,
+<code>restricted-v2</code> for every other pod (no <code>anyuid</code>);
+GPU count <code>2</code>.</p>
+<h3 id="25-ingest-a-sample-text-document-and-ask-a-question"><span class="num">2.5</span> Ingest
 a sample text document and ask a question</h3>
 <p>Second terminal (leave running):</p>
-<div class="sourceCode" id="cb32"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> port-forward <span class="at">-n</span> nvaie-test svc/ingestor-server 8082:8082 <span class="kw">&amp;</span></span>
-<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> port-forward <span class="at">-n</span> nvaie-test svc/rag-server 8081:8081 <span class="kw">&amp;</span></span>
-<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a><span class="bu">wait</span></span></code></pre></div>
-<p>First terminal:</p>
 <div class="sourceCode" id="cb33"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="fu">mkdir</span> <span class="at">-p</span> /tmp/rag-out <span class="kw">&amp;&amp;</span> <span class="va">OUT</span><span class="op">=</span>/tmp/rag-out <span class="fu">bash</span> deploy/scripts/rag-test.sh <span class="kw">|</span> <span class="fu">tee</span> /tmp/rag-out/rag-test.txt</span></code></pre></div>
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> port-forward <span class="at">-n</span> nvaie-test svc/ingestor-server 8082:8082 <span class="kw">&amp;</span></span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> port-forward <span class="at">-n</span> nvaie-test svc/rag-server 8081:8081 <span class="kw">&amp;</span></span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a><span class="bu">wait</span></span></code></pre></div>
+<p>First terminal:</p>
+<div class="sourceCode" id="cb34"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="fu">mkdir</span> <span class="at">-p</span> /tmp/rag-out <span class="kw">&amp;&amp;</span> <span class="va">OUT</span><span class="op">=</span>/tmp/rag-out <span class="fu">bash</span> deploy/scripts/rag-test.sh <span class="kw">|</span> <span class="fu">tee</span> /tmp/rag-out/rag-test.txt</span></code></pre></div>
 <p>The sample <code>deploy/rag/sample/nvaie-validation-note.txt</code>
 contains invented facts (a "secret validation phrase"). The test asks
 for them <strong>with</strong> the knowledge base, which must answer
@@ -853,46 +884,51 @@ PASS answer contains the planted phrase &quot;amber lantern seventeen&quot;
 ANSWER: I don&#39;t have information about ...
 PASS control answer does NOT contain the phrase (proves grounding)
 RESULT: ALL CHECKS PASSED</code></pre>
-<h3 id="25-success-check-and-evidence"><span class="num">2.5</span> Success check and
+<h3 id="26-success-check-and-evidence"><span class="num">2.6</span> Success check and
 evidence</h3>
 <p>Success criteria: a sample text document is ingested; a question
-returns an answer grounded in it (2.4 all PASS).</p>
-<div class="sourceCode" id="cb35"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="fu">bash</span> deploy/scripts/evidence.sh rag rag <span class="va">$NS</span> /tmp/rag-out</span></code></pre></div>
+returns an answer grounded in it (2.5 all PASS).</p>
+<div class="sourceCode" id="cb36"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="fu">bash</span> deploy/scripts/evidence.sh rag rag <span class="va">$NS</span> /tmp/rag-out</span></code></pre></div>
 <p>Expected:
 <code>Evidence: &lt;path&gt;/evidence-rag-&lt;timestamp&gt;.tar.gz</code>.</p>
 <h3
-id="26-uninstall-rag-and-clean-up-destructive-after-evidence-is-saved"><span class="num">2.6</span>
+id="27-uninstall-rag-and-clean-up-destructive-after-evidence-is-saved"><span class="num">2.7</span>
 Uninstall RAG and clean up (<span class="flag danger">DESTRUCTIVE</span>, after evidence is saved)</h3>
 <ol type="1">
 <li>Stop the port-forwards. Remove the release (this also removes the
-anyuid RoleBinding and the Elasticsearch, ingestor and SeaweedFS
-volumes, which are part of the release):
-<div class="sourceCode" id="cb36"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="ex">helm</span> uninstall rag <span class="at">-n</span> <span class="va">$NS</span> <span class="at">--wait</span> <span class="at">--timeout</span> 10m</span></code></pre></div></li>
+Elasticsearch, ingestor and SeaweedFS volumes, which are part of the
+release):
+<div class="sourceCode" id="cb37"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="ex">helm</span> uninstall rag <span class="at">-n</span> <span class="va">$NS</span> <span class="at">--wait</span> <span class="at">--timeout</span> 10m</span></code></pre></div></li>
 <li>Objects Helm keeps on purpose (NIMCache: keep policy; SeaweedFS
 secrets: keep). List, then delete exactly these:
-<div class="sourceCode" id="cb37"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get nimcache,nimservice,pvc,secret <span class="at">-n</span> <span class="va">$NS</span></span>
-<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete nimcache <span class="at">-n</span> <span class="va">$NS</span> nim-llm-cache nemotron-embedding-ms-cache</span>
-<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete secret <span class="at">-n</span> <span class="va">$NS</span> <span class="at">--ignore-not-found</span> rag-seaweedfs-s3-secret rag-seaweedfs-sftp-secret</span>
-<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pvc <span class="at">-n</span> <span class="va">$NS</span>            <span class="co"># then delete any remaining RAG PVC by name</span></span></code></pre></div>
+<div class="sourceCode" id="cb38"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get nimcache,nimservice,pvc,secret <span class="at">-n</span> <span class="va">$NS</span></span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete nimcache <span class="at">-n</span> <span class="va">$NS</span> nim-llm-cache nemotron-embedding-ms-cache</span>
+<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete secret <span class="at">-n</span> <span class="va">$NS</span> <span class="at">--ignore-not-found</span> rag-seaweedfs-s3-secret rag-seaweedfs-sftp-secret</span>
+<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get pvc <span class="at">-n</span> <span class="va">$NS</span>            <span class="co"># then delete any remaining RAG PVC by name</span></span></code></pre></div>
+The image build from 2.2 (BuildConfig, its builds, and the ImageStream
+with the built image in the internal registry):
+<div class="sourceCode" id="cb39"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get bc,build,is <span class="at">-n</span> <span class="va">$NS</span></span>
+<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete bc,is <span class="at">-n</span> <span class="va">$NS</span> nv-ingest-nonroot</span></code></pre></div>
 The NIM Operator also left its download account
 (<code>nim-cache-sa</code>, <code>nim-cache-role</code>,
 <code>nim-cache-rolebinding</code>). Remove it once no NIMCache is left:
-<div class="sourceCode" id="cb38"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete sa,role,rolebinding <span class="at">-n</span> <span class="va">$NS</span> nim-cache-sa nim-cache-role nim-cache-rolebinding <span class="at">--ignore-not-found</span></span></code></pre></div></li>
+<div class="sourceCode" id="cb40"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete sa,role,rolebinding <span class="at">-n</span> <span class="va">$NS</span> nim-cache-sa nim-cache-role nim-cache-rolebinding <span class="at">--ignore-not-found</span></span></code></pre></div></li>
 <li>Verify:
-<div class="sourceCode" id="cb39"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get all,pvc,nimcache,nimservice,rolebinding <span class="at">-n</span> <span class="va">$NS</span></span></code></pre></div>
+<div class="sourceCode" id="cb41"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get all,pvc,nimcache,nimservice,rolebinding <span class="at">-n</span> <span class="va">$NS</span></span></code></pre></div>
 Expected: no RAG objects left.</li>
 </ol>
 <hr />
 <h2 id="3-final-clean-up"><span class="num">3.</span> Final clean-up</h2>
 <p>Nothing cluster-wide was created, so only the two secrets remain.
 Delete them if the client wants the namespace empty (DESTRUCTIVE):</p>
-<div class="sourceCode" id="cb40"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete secret <span class="at">-n</span> <span class="va">$NS</span> ngc-registry-default ngc-api</span></code></pre></div>
+<div class="sourceCode" id="cb42"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete secret <span class="at">-n</span> <span class="va">$NS</span> ngc-registry-default ngc-api</span></code></pre></div>
 <hr />
 <h2 id="4-troubleshooting"><span class="num">4.</span> Troubleshooting</h2>
 <div class="table-wrap"><table>
@@ -913,13 +949,37 @@ eval jobs)</td>
 an SCC decision (A7). Do not grant anyuid on your own.</td>
 </tr>
 <tr class="even">
-<td><code>rag-nv-ingest</code> not created,
-<code>unable to validate against any security context constraint</code></td>
-<td>the anyuid RoleBinding (A5) is missing or was not allowed</td>
-<td><code>oc get rolebinding -n $NS rag-server-anyuid-scc</code>; a
-cluster-admin re-runs 2.2</td>
+<td><code>rag-nv-ingest</code> <code>ImagePullBackOff</code> /
+<code>ErrImagePull</code> on
+<code>image-registry.openshift-image-registry.svc:5000/...</code></td>
+<td>the image was not built (2.2), or the namespace in
+<code>deploy/rag/values-nvaie.yaml</code> is wrong</td>
+<td><code>oc get istag -n $NS</code>; run 2.2; check
+<code>nv-ingest.image.repository</code></td>
 </tr>
 <tr class="odd">
+<td>Build <code>nv-ingest-nonroot-1</code> fails pulling
+<code>nvcr.io/...nv-ingest:26.3.0</code>
+(<code>unauthorized</code>)</td>
+<td>pull secret missing on the build</td>
+<td><code>oc get secret ngc-registry-default -n $NS</code>; re-run the
+pre-flight, then <code>oc start-build</code> again</td>
+</tr>
+<tr class="even">
+<td>Build not started / forbidden (<code>builds/docker</code>)</td>
+<td>Docker builds not allowed in the namespace</td>
+<td>client approves A5, or plan B in
+<code>deploy/images/nv-ingest-nonroot/README.md</code></td>
+</tr>
+<tr class="odd">
+<td><code>rag-nv-ingest</code> log
+<code>The current node timed out during startup</code> (Ray)</td>
+<td>the image is NVIDIA's original or an old build (no precompiled
+bytecode)</td>
+<td>check the pod's image is <code>.../nv-ingest-nonroot:26.3.0</code>;
+rebuild (2.2)</td>
+</tr>
+<tr class="even">
 <td><code>rag-server</code> <code>CreateContainerConfigError</code>,
 <code>couldn't find key NVIDIA_API_KEY in Secret ngc-api</code></td>
 <td><code>ngc-api</code> made by an older pre-flight has only
@@ -927,27 +987,31 @@ cluster-admin re-runs 2.2</td>
 <td>export <code>NGC_API_KEY</code> and re-run the pre-flight (it adds
 the key); the pod starts by itself</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>NIMCache <code>NotReady</code>, message
 <code>no profiles are selected for caching</code></td>
 <td>the profile filter matches nothing in that NIM's manifest</td>
 <td><code>oc get cm -n $NS nim-llm-cache-manifest -o yaml</code> to see
 the profiles; send us the output</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>ImagePullBackOff</code> on non-nvcr images</td>
 <td>registry blocked</td>
 <td>re-run the pre-flight (0.3); agree a mirror with the client</td>
 </tr>
-<tr>
-<td><code>ImagePullBackOff</code>, event says <code>bds-docker-release.jfrog.io/...: unauthorized</code></td>
-<td>image given by short name (e.g. <code>mongo:7.0.14</code>); the nodes resolve short names to the client's Artifactory first</td>
-<td>use the fully qualified name (<code>docker.io/library/mongo</code>). Fixed in <code>values-nvaie.yaml</code> for mongo, redis and seaweedfs: pull the repo and re-run the <code>helm upgrade</code></td>
+<tr class="odd">
+<td><code>ImagePullBackOff</code>, event says
+<code>bds-docker-release.jfrog.io/...: unauthorized</code></td>
+<td>image given by short name (e.g. <code>mongo:7.0.14</code>); the
+nodes resolve short names to the client's Artifactory first</td>
+<td>use the fully qualified name (<code>docker.io/library/mongo</code>).
+Fixed in <code>values-nvaie.yaml</code> for mongo, redis and seaweedfs:
+pull the repo and re-run the <code>helm upgrade</code></td>
 </tr>
 <tr class="even">
 <td>NIMCache <code>ImagePullBackOff</code></td>
 <td>pull secret not linked to <code>nim-cache-sa</code></td>
-<td>2.2 <code>oc secrets link ...</code>, delete the cache pods</td>
+<td>2.3 <code>oc secrets link ...</code>, delete the cache pods</td>
 </tr>
 <tr class="odd">
 <td>RAG <code>nim-llm-cache</code> fails "no matching profile"</td>
@@ -999,7 +1063,7 @@ errors</td>
 <td>nv-ingest at its memory limit</td>
 <td>raise <code>nv-ingest.resources.limits.memory</code> in
 <code>deploy/rag/values-nvaie.yaml</code> (24Gi set),
-<code>helm upgrade</code> as in 2.2</td>
+<code>helm upgrade</code> as in 2.3</td>
 </tr>
 <tr class="odd">
 <td><code>rag-nv-ingest</code> restarts with

@@ -59,11 +59,31 @@ for r in deployments statefulsets services configmaps secrets persistentvolumecl
   [ "$(oc auth can-i create $r -n "$NS" 2>/dev/null)" = yes ] && pass "can create $r in $NS" \
     || fail "cannot create $r in $NS" "ask the client for admin rights in namespace $NS (or have a cluster-admin run the installs)"
 done
-# RAG only: nv-ingest must run as root -> RoleBinding to the anyuid SCC for ONE service account (approval A5).
-# Creating that RoleBinding requires the installer to hold "use" on the anyuid SCC (RBAC escalation check).
-if [ "$(oc auth can-i use securitycontextconstraints/anyuid -n "$NS" 2>/dev/null)" = yes ]; then
-  pass "can grant anyuid to the nv-ingest service account (RAG only, approval A5)"
-else warn "cannot grant anyuid in $NS (RAG only; the flywheel does not need it)" "before the RAG install a cluster-admin must approve A5 (anyuid for service account rag-nv-ingest only), or run the RAG install"; fi
+# RAG only: nothing may run as root, so nv-ingest uses our non-root rebuild of NVIDIA's image, built in
+# this namespace by an OpenShift build into the internal registry (RUNBOOK 2.2, approval A5).
+BUILD_FIX="RAG only: ask the client to allow OpenShift Docker builds in $NS (approval A5), or build the image on a workstation and push it to their registry (RUNBOOK 2.2, plan B)"
+if ! oc api-resources --api-group=build.openshift.io -o name 2>/dev/null | grep -q '^buildconfigs'; then
+  warn "OpenShift Builds are not available on this cluster" "$BUILD_FIX"
+else
+  for r in buildconfigs.build.openshift.io imagestreams.image.openshift.io builds/docker; do
+    [ "$(oc auth can-i create $r -n "$NS" 2>/dev/null)" = yes ] && pass "can create $r in $NS (RAG image build)" \
+      || warn "cannot create $r in $NS" "$BUILD_FIX"
+  done
+fi
+# The internal registry: a test ImageStream shows its address (empty = no internal registry). Deleted again.
+if oc api-resources --api-group=image.openshift.io -o name 2>/dev/null | grep -q '^imagestreams' \
+   && oc create imagestream nvaie-registry-check -n "$NS" >/dev/null 2>&1; then
+  repo=""; for _ in 1 2 3 4 5; do
+    repo=$(oc get imagestream nvaie-registry-check -n "$NS" -o jsonpath='{.status.dockerImageRepository}' 2>/dev/null)
+    [ -n "$repo" ] && break; sleep 2; done
+  oc delete imagestream nvaie-registry-check -n "$NS" >/dev/null 2>&1
+  if [ -z "$repo" ]; then warn "the internal image registry is not available" "$BUILD_FIX"
+  else
+    want="${repo%/nvaie-registry-check}/nv-ingest-nonroot"
+    if grep -q "repository: $want\$" "$D/rag/values-nvaie.yaml"; then pass "internal registry available; RAG values point nv-ingest to $want"
+    else warn "RAG values do not point nv-ingest to $want" "set nv-ingest.image.repository to $want in deploy/rag/values-nvaie.yaml (RUNBOOK 0.3.2)"; fi
+  fi
+else warn "cannot create an ImageStream in $NS" "$BUILD_FIX"; fi
 
 # ---------------------------------------------------------------- 0.3.1 quotas
 section "Quotas and limits (0.3.1)"
@@ -240,7 +260,7 @@ if [ $NFAIL -eq 0 ]; then echo "RESULT: READY  ($NWARN warning(s) to read below)
 else echo "RESULT: NOT READY  ($NFAIL failure(s), $NWARN warning(s))"; fi
 if [ ${#ACTIONS[@]} -gt 0 ]; then
   echo; echo "What to do:"
-  for a in "${ACTIONS[@]}"; do echo "  - $a"; done
+  printf '%s\n' "${ACTIONS[@]}" | awk '!seen[$0]++ {print "  - " $0}'   # same action once
 fi
 echo "=================================================================="
 [ $NFAIL -eq 0 ]

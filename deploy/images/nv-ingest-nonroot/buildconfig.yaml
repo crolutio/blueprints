@@ -1,0 +1,33 @@
+# OpenShift build of the non-root nv-ingest image, inside the namespace (RUNBOOK 2.2).
+#   oc apply -n $NS -f deploy/images/nv-ingest-nonroot/buildconfig.yaml
+#   oc start-build nv-ingest-nonroot -n $NS --from-dir=deploy/images/nv-ingest-nonroot --follow --wait
+# Pulls NVIDIA's nv-ingest 26.3.0 from nvcr.io (pull secret ngc-registry-default), applies Containerfile,
+# and pushes the result to the internal registry as nv-ingest-nonroot:26.3.0 in this namespace.
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: nv-ingest-nonroot
+  labels: {app.kubernetes.io/part-of: nvaie-rag}
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: nv-ingest-nonroot
+  labels: {app.kubernetes.io/part-of: nvaie-rag}
+spec:
+  runPolicy: Serial
+  source:
+    type: Binary              # the folder is uploaded by "oc start-build --from-dir"
+    binary: {}
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Containerfile
+      pullSecret: {name: ngc-registry-default}
+  output:
+    to: {kind: ImageStreamTag, name: "nv-ingest-nonroot:26.3.0"}
+  resources:                  # explicit, so the build pod is accepted under a ResourceQuota
+    requests: {cpu: "1", memory: 4Gi}
+    limits:   {cpu: "4", memory: 8Gi}
+  successfulBuildsHistoryLimit: 1
+  failedBuildsHistoryLimit: 2

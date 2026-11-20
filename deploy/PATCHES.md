@@ -5,7 +5,7 @@ Upstream sources (download from GitHub/NGC at these versions to compare):
 | Blueprint | Upstream | Patched copy | Package |
 |---|---|---|---|
 | Data Flywheel | github.com/NVIDIA-AI-Blueprints/data-flywheel @ tag **v0.3.1** (chart 0.3.1) + NeMo Microservices chart **25.8.0** from NGC | chart `0.3.1-nvaie.2` | `deploy/packages/nvidia-blueprint-data-flywheel-0.3.1-nvaie.2.tgz` |
-| RAG | github.com/NVIDIA-AI-Blueprints/rag @ tag **v2.6.2** (chart v2.6.0) + nv-ingest **26.3.0**, seaweedfs **4.21.0**, eck-elasticsearch **0.18.0** (vendored, disabled) | chart `v2.6.0-nvaie.2` | `deploy/packages/nvidia-blueprint-rag-v2.6.0-nvaie.2.tgz` |
+| RAG | github.com/NVIDIA-AI-Blueprints/rag @ tag **v2.6.2** (chart v2.6.0) + nv-ingest **26.3.0**, seaweedfs **4.21.0**, eck-elasticsearch **0.18.0** (vendored, disabled) | chart `v2.6.0-nvaie.3` | `deploy/packages/nvidia-blueprint-rag-v2.6.0-nvaie.3.tgz` |
 
 Exact diffs against those upstream versions (unified diff):
 
@@ -15,12 +15,16 @@ Exact diffs against those upstream versions (unified diff):
 - `deploy/rag/nv-ingest-subchart-patch.diff`: nv-ingest 26.3.0
 
 **Design rule:** every template change sits behind a new value whose default reproduces upstream
-behaviour. Our values files turn the changes on. Nothing changes application code or images.
+behaviour. Our values files turn the changes on. Nothing changes application code. One image is
+rebuilt: nv-ingest, so it can run as non-root (section 6).
 
 **Result:** with our values neither release creates any cluster-scoped object (no CRDs, ClusterRoles,
 ClusterRoleBindings or webhooks), and no operator is installed besides the NIM Operator the client
 already runs. The flywheel runs in evaluation mode (fine-tuning off, so no NeMo Operator, Customizer
 or Volcano); RAG uses a plain Elasticsearch Deployment instead of the ECK operator.
+
+**Nothing runs as root.** No `anyuid` (or other extra SCC) is requested: our pods run under the default
+`restricted-v2` (random UID), the NIM pods under `nonroot` (UID 1000, set by the NIM Operator).
 
 ---
 
@@ -72,14 +76,14 @@ fine-tuning is off). They stay in the package, inactive, so fine-tuning could be
 
 | # | File | Change | Why | Enabled by |
 |---|---|---|---|---|
-| R1 | `Chart.yaml` | Removed dependencies zipkin, opentelemetry-collector, kube-prometheus-stack; version `v2.6.0-nvaie.2` | Disabled anyway; barebones; nothing extra to vendor | always |
+| R1 | `Chart.yaml` | Removed dependencies zipkin, opentelemetry-collector, kube-prometheus-stack; version `v2.6.0-nvaie.3` | Disabled anyway; barebones; nothing extra to vendor | always |
 | R2 | `templates/deployment.yaml`, `ingestor-server-deployment.yaml` | Optional Kueue pod label | Kueue (off by default) | `kueue.queueName` |
 | R3 | `templates/llm-nim.yaml`, `embedding-nim.yaml` | Optional Kueue label on `NIMService` (`spec.labels`); optional `resources` on `NIMCache` (upstream: `{}`) | Kueue; explicit cpu/memory for the model-download job | `kueue.queueName`, `nimOperator.<nim>.cacheResources` |
 | R3b | `templates/embedding-nim.yaml` | Optional `model` (profile filter) on the embedding `NIMCache` | Upstream passes none, so the operator caches all 11 profiles of NIM 1.13.0 (~20 GB, more than the 20Gi volume). We cache only the L40S profile. | `nimOperator.nvidia-nim-llama-nemotron-embed-1b-v2.model` |
 | R4 | `values.yaml` | Default `kueue.queueName: ""` | | |
 | R5 | `charts/` | nv-ingest 26.3.0, seaweedfs 4.21.0, eck-elasticsearch 0.18.0 vendored as `.tgz` | Offline install (eck-elasticsearch is disabled by our values) | |
 | R6 | `templates/elasticsearch.yaml` (**new**) | Plain single-node Elasticsearch: Deployment + Service `rag-elasticsearch:9200` + 5Gi PVC; security off, `node.store.allow_mmap: false`, no fixed UID | Replaces the eck-elasticsearch subchart, which needs the ECK operator and its cluster-wide CRDs. Same settings as NVIDIA's Docker Compose deployment of this blueprint. Tested with ES 9.3.0 as a random UID with group 0 (restricted-v2 conditions): collection create, vector write, vector search, document listing all work. | `elasticsearch.enabled: true`, `eck-elasticsearch.enabled: false`, `APP_VECTORSTORE_URL` |
-| R7 | `templates/openshift.yaml` | The anyuid RoleBinding's subject list can be replaced | Upstream grants anyuid to 7 service accounts including `default` (every pod without its own account). Only nv-ingest needs it: its Python interpreter is a symlink into `/root` (mode 700), so it cannot start as any other UID. Everything else runs under restricted-v2. | `openshift.anyuidServiceAccounts: ["{{ .Release.Name }}-nv-ingest"]` |
+| R7 | `templates/openshift.yaml`, `values.yaml` | The anyuid RoleBinding can be switched off (`openshift.anyuidRoleBinding`, default `true` = upstream), and its subject list replaced (`openshift.anyuidServiceAccounts`) | Upstream grants anyuid (run as any UID, including root) to 7 service accounts including `default`. The client allows nothing to run as root; with the non-root nv-ingest image (section 6) no pod needs anyuid. | `openshift.anyuidRoleBinding: false` |
 
 Values-only changes for restricted-v2 (no template change): `TEMP_DIR=/tmp-data` for rag-server
 (its default `./tmp-data` sits under the root-owned `/workspace`; as a random UID every
@@ -96,6 +100,10 @@ merged in and match no profile ("no profiles are selected for caching"). Result:
 Secret `ngc-api` (created by `deploy/scripts/preflight.sh`) holds the NGC key under both `NGC_API_KEY` (NIMs)
 and `NVIDIA_API_KEY` (rag-server reads this name; without it the pod stops with CreateContainerConfigError).
 
+nv-ingest (values only): image = our non-root build (section 6) from the internal registry, and the
+OpenShift overlay's fixed `fsGroup: 1000` removed (`podSecurityContext.fsGroup: null`; restricted-v2 rejects
+fixed fsGroups and assigns one from the namespace range).
+
 ## 4. nv-ingest 26.3.0 subchart
 
 | # | File | Change | Why |
@@ -107,3 +115,15 @@ and `NVIDIA_API_KEY` (rag-server reads this name; without it the pod stops with 
 None installed by us. The only operator used is the NVIDIA NIM Operator the client already runs
 (3.1.2, OperatorHub). On OpenShift it gives the NIM and model-download pods the `nonroot` SCC itself
 (its own Role), so they need nothing from our charts.
+
+## 6. Image: nv-ingest 26.3.0, non-root
+
+`deploy/images/nv-ingest-nonroot/` (`Containerfile`, `buildconfig.yaml`, `README.md`). Built in the namespace
+by an OpenShift build (RUNBOOK 2.2) from NVIDIA's `nvcr.io/nvidia/nemo-microservices/nv-ingest:26.3.0`.
+
+| # | Change | Why |
+|---|---|---|
+| N1 | Python and `uv` moved from `/root/.local` to `/opt/uv`; venv link and `pyvenv.cfg` updated | `/root` is mode 700, so no other user could start Python. `/opt/uv` is where NVIDIA's later nv-ingest releases put it (their fix, which no RAG 2.6-compatible release has). |
+| N2 | `/workspace` and `HOME=/home/nvingest` owned by group 0, group-writable | OpenShift runs the pod as a random UID in group 0 |
+| N3 | All Python code precompiled (`compileall`) | NVIDIA's image ships no bytecode for Ray. Root writes it on first use; a non-root user cannot, so every Ray process compiled thousands of files at start-up and Ray's fixed 15 s start-up check failed. |
+| N4 | `USER 1001` | Declares a non-root user; OpenShift replaces it with the namespace's random UID |

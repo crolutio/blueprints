@@ -15,20 +15,19 @@
 # CONFIG items: namespace (helm -n), StorageClass, Kueue label, nodeSelectors.
 # Requires on the cluster: the NVIDIA NIM Operator (already installed by the client).
 # Creates NO cluster-scoped objects. Elasticsearch is a plain Deployment in the namespace.
-# OpenShift: everything runs under restricted-v2 except nv-ingest, which must run as root
-# (its Python interpreter lives under /root, mode 700) -> anyuid for that ONE service account.
+# OpenShift: NOTHING runs as root. Every pod runs under restricted-v2 (random UID), the NIM pods
+# under nonroot (UID 1000, set by the NIM Operator). nv-ingest uses our non-root rebuild of NVIDIA's
+# image (deploy/images/nv-ingest-nonroot), because NVIDIA's 26.3.0 image can only run as root.
 # =============================================================================
 
 # CONFIG: Kueue LocalQueue label ("" = off). Applies to rag-server, ingestor-server, NIM pods.
 kueue:
   queueName: ""
 
-# --- OpenShift: anyuid RoleBinding for nv-ingest ONLY (NVIDIA's chart grants it to 7 service
-# accounts including "default"), no external Routes.
+# --- OpenShift: no anyuid (NVIDIA's chart grants it to 7 service accounts), no external Routes.
 openshift:
-  enabled: true                 # renders RoleBinding rag-server-anyuid-scc -> NEEDS CLIENT APPROVAL (A5)
-  anyuidServiceAccounts:        # PATCH key: replaces the upstream subject list
-    - "{{ .Release.Name }}-nv-ingest"
+  enabled: true
+  anyuidRoleBinding: false      # PATCH key: no anyuid RoleBinding at all -> nothing can run as root
   routes:
     frontend: {enabled: false}
     ragServer: {enabled: false} # validation is done in-cluster (oc exec / port-forward)
@@ -205,6 +204,16 @@ nimOperator:
 
 # --- nv-ingest: text extraction only, no extraction NIMs ---
 nv-ingest:
+  # CONFIG: our non-root build of nv-ingest 26.3.0 (deploy/images/nv-ingest-nonroot, runbook 2.0).
+  # Default = built inside the namespace with an OpenShift build into the internal registry.
+  image:
+    repository: image-registry.openshift-image-registry.svc:5000/nvaie-test/nv-ingest-nonroot
+    tag: "26.3.0"
+    pullPolicy: Always
+  # NVIDIA's OpenShift overlay keeps the chart's fixed fsGroup 1000, which restricted-v2 rejects:
+  # remove it so OpenShift assigns one from the namespace range.
+  podSecurityContext:
+    fsGroup: null
   imagePullSecrets:
     - name: ngc-registry-default
   podLabels: {}                 # add kueue.x-k8s.io/queue-name here if Kueue is required
