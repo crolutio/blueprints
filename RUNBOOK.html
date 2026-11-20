@@ -958,6 +958,16 @@ an SCC decision (A7). Do not grant anyuid on your own.</td>
 <code>nv-ingest.image.repository</code></td>
 </tr>
 <tr class="odd">
+<td>same, event says <code>authentication required</code></td>
+<td>the pod lists a pull secret, so OpenShift does not add the service
+account's registry login</td>
+<td><code>deploy/rag/values-nvaie.yaml</code> must have
+<code>nv-ingest.imagePullSecrets: []</code> (pull the repo), then re-run
+the <code>helm upgrade</code> in 2.3; check
+<code>oc get sa rag-nv-ingest -n $NS -o jsonpath='{.imagePullSecrets}'</code>
+lists a <code>dockercfg</code> secret</td>
+</tr>
+<tr class="even">
 <td>Build <code>nv-ingest-nonroot-1</code> fails pulling
 <code>nvcr.io/...nv-ingest:26.3.0</code>
 (<code>unauthorized</code>)</td>
@@ -965,13 +975,13 @@ an SCC decision (A7). Do not grant anyuid on your own.</td>
 <td><code>oc get secret ngc-registry-default -n $NS</code>; re-run the
 pre-flight, then <code>oc start-build</code> again</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Build not started / forbidden (<code>builds/docker</code>)</td>
 <td>Docker builds not allowed in the namespace</td>
 <td>client approves A5, or plan B in
 <code>deploy/images/nv-ingest-nonroot/README.md</code></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>rag-nv-ingest</code> log
 <code>The current node timed out during startup</code> (Ray)</td>
 <td>the image is NVIDIA's original or an old build (no precompiled
@@ -979,7 +989,7 @@ bytecode)</td>
 <td>check the pod's image is <code>.../nv-ingest-nonroot:26.3.0</code>;
 rebuild (2.2)</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>rag-server</code> <code>CreateContainerConfigError</code>,
 <code>couldn't find key NVIDIA_API_KEY in Secret ngc-api</code></td>
 <td><code>ngc-api</code> made by an older pre-flight has only
@@ -987,19 +997,19 @@ rebuild (2.2)</td>
 <td>export <code>NGC_API_KEY</code> and re-run the pre-flight (it adds
 the key); the pod starts by itself</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>NIMCache <code>NotReady</code>, message
 <code>no profiles are selected for caching</code></td>
 <td>the profile filter matches nothing in that NIM's manifest</td>
 <td><code>oc get cm -n $NS nim-llm-cache-manifest -o yaml</code> to see
 the profiles; send us the output</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>ImagePullBackOff</code> on non-nvcr images</td>
 <td>registry blocked</td>
 <td>re-run the pre-flight (0.3); agree a mirror with the client</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>ImagePullBackOff</code>, event says
 <code>bds-docker-release.jfrog.io/...: unauthorized</code></td>
 <td>image given by short name (e.g. <code>mongo:7.0.14</code>); the
@@ -1008,35 +1018,35 @@ nodes resolve short names to the client's Artifactory first</td>
 Fixed in <code>values-nvaie.yaml</code> for mongo, redis and seaweedfs:
 pull the repo and re-run the <code>helm upgrade</code></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>NIMCache <code>ImagePullBackOff</code></td>
 <td>pull secret not linked to <code>nim-cache-sa</code></td>
 <td>2.3 <code>oc secrets link ...</code>, delete the cache pods</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>RAG <code>nim-llm-cache</code> fails "no matching profile"</td>
 <td>the profile filter does not fit the tag</td>
 <td><code>helm upgrade</code> with
 <code>--set-json 'nimOperator.nim-llm.model={"tensorParallelism":"1"}'</code></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>NIM LLM OOM on L40S</td>
 <td>context too long for 48 GB</td>
 <td>add env <code>NIM_MAX_MODEL_LEN=8192</code> to
 <code>nimOperator.nim-llm.env</code></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>Flywheel job stuck before evals</td>
 <td>judge NIM not ready</td>
 <td><code>oc get nimservice</code>, judge pod logs</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>nemo-gateway</code> CrashLoopBackOff, log
 <code>host not found in upstream</code></td>
 <td>a NeMo service it routes to does not exist</td>
 <td><code>oc logs deploy/nemo-gateway</code>; send us the output</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>df-*</code> pods crash with <code>uv</code>/permission
 errors</td>
 <td>uv trying to sync/write</td>
@@ -1044,20 +1054,20 @@ errors</td>
 <code>UV_CACHE_DIR=/tmp/uv-cache</code>; check
 <code>oc exec ... env</code></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>RAG answer "Sorry, there was an error", rag-server log
 <code>Permission denied: './tmp-data'</code></td>
 <td><code>TEMP_DIR</code> not set</td>
 <td>values set <code>TEMP_DIR=/tmp-data</code>; check
 <code>oc exec deploy/rag-server -- env | grep TEMP_DIR</code></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>rag-elasticsearch</code> not Ready</td>
 <td>volume not writable, or out of memory</td>
 <td><code>oc logs deploy/rag-elasticsearch</code>;
 <code>oc describe pod -l app=rag-elasticsearch</code></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>RAG ingestion stays <code>PENDING</code>, nv-ingest log
 <code>killed due to memory pressure</code></td>
 <td>nv-ingest at its memory limit</td>
@@ -1065,7 +1075,7 @@ errors</td>
 <code>deploy/rag/values-nvaie.yaml</code> (24Gi set),
 <code>helm upgrade</code> as in 2.3</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>rag-nv-ingest</code> restarts with
 <code>pthread_create failed</code></td>
 <td>kubelet <code>podPidsLimit</code></td>

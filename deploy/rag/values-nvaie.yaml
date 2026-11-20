@@ -214,8 +214,10 @@ nv-ingest:
   # remove it so OpenShift assigns one from the namespace range.
   podSecurityContext:
     fsGroup: null
-  imagePullSecrets:
-    - name: ngc-registry-default
+  # NO pod-level pull secrets: the image comes from the internal registry, and OpenShift adds the
+  # service account's own registry login only to pods that list none (a listed nvcr.io secret
+  # blocks it -> "authentication required").
+  imagePullSecrets: []
   podLabels: {}                 # add kueue.x-k8s.io/queue-name here if Kueue is required
   # ~125 Python processes (32 gunicorn API workers hard-coded in the image entrypoint + ~50 Ray
   # workers). NVIDIA's default is a 24Gi request with NO limit; near the limit Ray kills its own
