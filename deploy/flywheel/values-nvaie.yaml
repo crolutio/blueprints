@@ -75,14 +75,14 @@ elasticsearch:
     requests: {cpu: 500m, memory: 2Gi, ephemeral-storage: 1Gi}
     limits:   {cpu: "2",  memory: 3Gi, ephemeral-storage: 5Gi}
 mongodb:
-  image: {repository: mongo, tag: "7.0.14"}           # upstream: mongo:7.0 (floating) -> pinned patch release
+  image: {repository: docker.io/library/mongo, tag: "7.0.14"}   # fully qualified: short names resolve to the client's Artifactory (unauthorized). upstream: mongo:7.0 -> pinned
   service: {type: ClusterIP, port: 27017}
   dataDirs: [/data/db, /data/configdb]
   resources:
     requests: {cpu: 250m, memory: 512Mi, ephemeral-storage: 1Gi}
     limits:   {cpu: "1",  memory: 2Gi,   ephemeral-storage: 5Gi}
 redis:
-  image: {repository: redis, tag: "7.2.5-alpine"}     # upstream: redis:7.2-alpine (floating) -> pinned
+  image: {repository: docker.io/library/redis, tag: "7.2.5-alpine"}   # fully qualified (see mongodb). upstream: redis:7.2-alpine -> pinned
   service: {type: ClusterIP, port: 6379}
   dataDirs: [/data]
   resources:

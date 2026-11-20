@@ -939,6 +939,11 @@ the profiles; send us the output</td>
 <td>registry blocked</td>
 <td>re-run the pre-flight (0.3); agree a mirror with the client</td>
 </tr>
+<tr>
+<td><code>ImagePullBackOff</code>, event says <code>bds-docker-release.jfrog.io/...: unauthorized</code></td>
+<td>image given by short name (e.g. <code>mongo:7.0.14</code>); the nodes resolve short names to the client's Artifactory first</td>
+<td>use the fully qualified name (<code>docker.io/library/mongo</code>). Fixed in <code>values-nvaie.yaml</code> for mongo, redis and seaweedfs: pull the repo and re-run the <code>helm upgrade</code></td>
+</tr>
 <tr class="even">
 <td>NIMCache <code>ImagePullBackOff</code></td>
 <td>pull secret not linked to <code>nim-cache-sa</code></td>

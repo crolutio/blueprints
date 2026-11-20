@@ -104,6 +104,7 @@ frontend:
 
 # --- SeaweedFS (S3 object store used by nv-ingest / ingestor) ---
 seaweedfs:
+  image: {repository: docker.io/chrislusf/seaweedfs, tag: "3.73"}   # fully qualified: short names resolve to the client's Artifactory (unauthorized)
   allInOne:
     resources:
       requests: {cpu: 100m, memory: 256Mi}
